@@ -43,7 +43,7 @@ const GLOBAL_INDEX_DEFINITIONS = [
   { symbol: "^N225", label: "日經 225", country: "日本", market: "東京市場" },
   { symbol: "^KS11", label: "KOSPI", country: "韓國", market: "韓國市場" },
 ];
-const PERFORMANCE_ASSET_VERSION = "20260702-14";
+const PERFORMANCE_ASSET_VERSION = "20260703-17";
 const PWA_HEAD = `
   <meta name="theme-color" content="#0d2f58">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -104,7 +104,7 @@ const HOME_CSS = String.raw`
     .tree,.branch{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:10px;overflow:hidden}.tree summary,.branch summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:13px 14px;font-weight:900}.tree summary small,.branch summary small{color:var(--muted);font-weight:700;text-align:right}.tree-body{padding:10px}.branch{box-shadow:none}.tagline{padding:0 14px 10px}.peer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 10px 10px}.peer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;border:1px solid var(--line);border-radius:6px;padding:10px;text-decoration:none}.peer small{display:block;color:var(--muted);line-height:1.45}.peer b{color:var(--red);text-align:right}.pager{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px 8px 12px}.pager button{border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:#fff;font:inherit;font-weight:900;cursor:pointer;white-space:nowrap}.pager button:disabled{cursor:not-allowed;opacity:.45}.pager span{min-width:0;color:var(--muted);font-size:.82rem;font-weight:900;text-align:center}.theme-industries{display:grid;gap:8px;padding:0 10px 10px}.theme-industry{border:1px solid var(--line);border-radius:6px;background:#fff;overflow:hidden}.theme-industry summary{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;cursor:pointer;list-style:none}.theme-industry summary::-webkit-details-marker{display:none}.theme-industry small{color:var(--muted);text-align:right}
     .recommend-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.recommend-card{display:grid;align-content:start;gap:8px;min-height:170px;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff;text-decoration:none}.recommend-card strong{font-size:1.08rem}.recommend-card p{margin-bottom:0}.label-chip{display:inline-flex;min-height:23px;margin:2px 4px 2px 0;border:1px solid rgba(31,122,90,.24);border-radius:999px;padding:2px 8px;color:var(--green);font-size:.76rem;font-weight:900;background:rgba(31,122,90,.08)}.roster-stock-link{cursor:pointer;text-decoration:none}.roster-stock-link:hover{border-color:var(--green);background:rgba(31,122,90,.16)}
     .quality-warning{grid-column:1/-1;border:1px solid rgba(168,121,26,.28);border-radius:8px;padding:14px;background:#fffaf0}.quality-warning p{margin:6px 0 0}.quality-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.quality-row{min-width:0;border:1px solid var(--line);border-radius:7px;padding:10px;background:#fff}.quality-row span,.quality-row strong,.quality-row small{display:block}.quality-row span{color:var(--muted);font-size:.76rem;font-weight:900}.quality-row strong{margin-top:5px}.quality-row small{margin-top:4px;color:var(--muted)}.quality-summary{display:flex;flex-wrap:wrap;gap:8px}.quality-summary b{border:1px solid var(--line);border-radius:999px;padding:5px 9px;background:#fff;font-size:.78rem}
-    .screener-form{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:12px}.screener-form label{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:.76rem;font-weight:900}.screener-form input,.screener-form select,.screener-form button{width:100%;min-width:0;border:1px solid var(--line);border-radius:6px;padding:9px;background:#fff;color:var(--ink);font:inherit}.screener-form button{align-self:end;border-color:var(--green);background:var(--green);color:#fff;font-weight:900;cursor:pointer}.screener-theme-search{position:relative;display:block}.screener-theme-search input{padding-right:28px}.screener-theme-suggestions{position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:34;display:grid;max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:5px;background:#fff;box-shadow:var(--shadow)}.screener-theme-option{display:flex;justify-content:space-between;gap:8px;width:100%;border:0!important;border-radius:5px!important;padding:9px 10px!important;background:#fff!important;color:var(--ink)!important;text-align:left;cursor:pointer}.screener-theme-option:hover,.screener-theme-option:focus{background:#f1f6f2!important;outline:none}.screener-theme-option small{color:var(--muted);font-size:.72rem}.screener-presets{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:7px}.screener-presets span{color:var(--muted);font-size:.78rem;font-weight:900}.screener-presets button{width:auto;border-color:var(--line);padding:7px 10px;background:#fff;color:var(--green)}.screener-actions{display:flex;align-self:end;gap:7px}.screener-actions button{min-height:42px}.screener-actions .screener-reset{border-color:var(--line);background:#fff;color:var(--ink)}.screener-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.screener-result{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:7px;padding:11px;background:#fff;color:inherit;text-decoration:none}.screener-result small{color:var(--muted);line-height:1.45}.screener-status{margin:10px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}
+    .stock-lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;margin-top:12px}.stock-lookup-search{position:relative;min-width:0}.stock-lookup input,.stock-lookup>button{width:100%;min-height:46px;border:1px solid var(--line);border-radius:7px;padding:10px 12px;background:#fff;color:var(--ink);font:inherit}.stock-lookup>button{width:auto;border-color:var(--green);background:var(--green);color:#fff;font-weight:900;cursor:pointer}.stock-lookup-suggestions{position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:36;display:grid;max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:5px;background:#fff;box-shadow:var(--shadow)}.stock-lookup-option{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;width:100%;border:0;border-radius:6px;padding:10px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer}.stock-lookup-option:hover,.stock-lookup-option:focus,.stock-lookup-option.active{background:#f1f6f2;outline:none}.stock-lookup-option strong{min-width:0}.stock-lookup-option small{grid-row:1/3;grid-column:2;color:var(--muted);font-size:.74rem;text-align:right}.stock-lookup-option span{color:var(--muted);font-size:.78rem}.advanced-screener{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}.advanced-screener>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;color:var(--green);font-weight:900}.advanced-screener>summary small{color:var(--muted);font-weight:700}.advanced-screener>summary::marker{color:var(--green)}.screener-form{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:12px}.screener-form label{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:.76rem;font-weight:900}.screener-form input,.screener-form select,.screener-form button{width:100%;min-width:0;border:1px solid var(--line);border-radius:6px;padding:9px;background:#fff;color:var(--ink);font:inherit}.screener-form button{align-self:end;border-color:var(--green);background:var(--green);color:#fff;font-weight:900;cursor:pointer}.screener-theme-search{position:relative;display:block}.screener-theme-search input{padding-right:28px}.screener-theme-suggestions{position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:34;display:grid;max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:5px;background:#fff;box-shadow:var(--shadow)}.screener-theme-option{display:flex;justify-content:space-between;gap:8px;width:100%;border:0!important;border-radius:5px!important;padding:9px 10px!important;background:#fff!important;color:var(--ink)!important;text-align:left;cursor:pointer}.screener-theme-option:hover,.screener-theme-option:focus{background:#f1f6f2!important;outline:none}.screener-theme-option small{color:var(--muted);font-size:.72rem}.screener-presets{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:7px}.screener-presets span{color:var(--muted);font-size:.78rem;font-weight:900}.screener-presets button{width:auto;border-color:var(--line);padding:7px 10px;background:#fff;color:var(--green)}.screener-actions{display:flex;align-self:end;gap:7px}.screener-actions button{min-height:42px}.screener-actions .screener-reset{border-color:var(--line);background:#fff;color:var(--ink)}.screener-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.screener-result{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:7px;padding:11px;background:#fff;color:inherit;text-decoration:none}.screener-result small{color:var(--muted);line-height:1.45}.screener-status{margin:10px 0 0;color:var(--muted);font-size:.82rem;font-weight:800}
     .compare-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;margin-top:12px}.compare-builder{display:grid;gap:8px;min-width:0}.compare-selected{display:flex;flex-wrap:wrap;gap:7px;min-height:30px}.compare-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(40,109,168,.28);border-radius:7px;padding:6px 8px;background:rgba(40,109,168,.07);color:var(--ink);font:inherit;font-size:.8rem;font-weight:900}.compare-chip button{border:0;padding:0;background:transparent;color:var(--muted);font-size:1rem;line-height:1;cursor:pointer}.compare-search{position:relative}.compare-form input,.compare-form>button{width:100%;border:1px solid var(--line);border-radius:6px;padding:10px;font:inherit}.compare-form>button{width:auto;border-color:var(--blue);background:var(--blue);color:#fff;font-weight:900;cursor:pointer}.compare-suggestions{position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:30;display:grid;max-height:290px;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:5px;background:#fff;box-shadow:var(--shadow)}.compare-suggestion{display:flex;justify-content:space-between;gap:10px;width:100%;border:0;border-radius:5px;padding:9px 10px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer}.compare-suggestion:hover,.compare-suggestion:focus{background:#f1f6f2;outline:none}.compare-suggestion small{color:var(--muted)}.compare-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.compare-card{display:block;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff;color:inherit;text-decoration:none}.compare-card:hover{border-color:var(--blue);box-shadow:0 10px 24px rgba(40,109,168,.1)}.compare-card h3{margin:0 0 8px}.compare-card dl{display:grid;gap:6px;margin:0}.compare-card dl div{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:6px}.compare-card dt{color:var(--muted);font-size:.76rem}.compare-card dd{margin:0;font-weight:900;text-align:right}.compare-open{display:block;margin-top:10px;color:var(--blue);font-size:.78rem;font-weight:900;text-align:right}
     .leader-create,.leader-tabs,.roster-tools{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.leader-create{border:1px dashed rgba(31,122,90,.34);border-radius:8px;padding:10px;background:rgba(31,122,90,.04)}.leader-create input,.roster-tools input{min-width:180px;flex:1 1 180px;border:1px solid var(--line);border-radius:6px;padding:10px 11px;font:inherit}.leader-create button,.leader-tabs button,.roster-tools button{border:1px solid var(--line);border-radius:6px;padding:9px 12px;color:var(--ink);font-weight:900;background:#fff;cursor:pointer}.leader-create button,.leader-tabs button.active,.roster-tools button{border-color:var(--green);color:#fff;background:var(--green)}.leader-tab-wrap{display:inline-flex;align-items:stretch}.leader-tab-wrap>[data-leader]{border-radius:6px}.leader-tab-wrap:has(.leader-remove)>[data-leader]{border-radius:6px 0 0 6px}.leader-tab-wrap .leader-remove{border-left:0;border-radius:0 6px 6px 0;padding-inline:9px;color:var(--red);background:#fff}.roster-list{display:grid;gap:10px}.roster-item{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.drag-handle{color:var(--muted);font-size:.78rem;font-weight:900}.roster-item p{margin-bottom:6px}.roster-item button{border:1px solid rgba(217,74,58,.28);border-radius:6px;padding:8px 10px;color:var(--red);font-weight:900;background:rgba(217,74,58,.08);cursor:pointer}.roster-note-editor{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:center;margin-top:8px;color:var(--muted);font-size:.78rem;font-weight:900}.roster-note-editor input{min-width:0;width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;color:var(--ink);background:#fff;font:inherit}.roster-note-editor input:focus{outline:2px solid rgba(31,122,90,.2);border-color:var(--green)}
     .flow-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.flow-panel{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:8px;background:#fff;padding:14px}.flow-panel-title{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}.flow-panel-title h3{margin:0}.flow-panel-title .info-dot{width:22px;height:22px;font-size:.78rem}.flow-context{margin:0 0 6px;border-bottom:1px solid var(--line);padding:0 0 8px;color:var(--blue);font-size:.8rem;font-weight:900;line-height:1.4}.flow-empty{margin:8px 0;border:1px dashed var(--line);border-radius:7px;padding:14px;color:var(--muted);font-size:.85rem;line-height:1.5}.flow-row{display:block;width:100%;padding:10px 0;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;font:inherit}.flow-row>span,.flow-row>.flow-track,.flow-row>b{display:block;width:100%;max-width:100%;min-width:0}.flow-row>.flow-track,.flow-row>b{margin-top:7px}.flow-link{color:inherit;text-decoration:none}.flow-choice{cursor:pointer;outline:none}.flow-choice:focus-visible{outline:2px solid rgba(31,122,90,.36);outline-offset:2px}.flow-choice.active{border-radius:6px;background:#f4f7f2;box-shadow:inset 3px 0 0 var(--green);padding-left:8px;padding-right:8px}.flow-row:last-child{border-bottom:0}.flow-row strong,.flow-row small,.flow-row b{overflow-wrap:anywhere;word-break:break-word}.flow-row small{display:block;color:var(--muted);line-height:1.45}.flow-row b{text-align:left;color:var(--ink);font-size:.88rem;line-height:1.35;white-space:normal}.flow-track{height:12px;border-radius:999px;background:#e7ece8;overflow:hidden}.flow-track i{display:block;height:100%;border-radius:inherit}.flow-track .buy{background:var(--red)}.flow-track .sell{background:var(--green)}.flow-group{border-bottom:1px solid var(--line)}.flow-group:last-child{border-bottom:0}.flow-group summary{list-style:none;cursor:pointer}.flow-group summary::-webkit-details-marker{display:none}.flow-group summary strong::before{content:"+";display:inline-grid;place-items:center;width:18px;height:18px;margin-right:6px;border-radius:50%;background:#edf3ee;color:var(--green);font-size:.78rem}.flow-group[open] summary strong::before{content:"-"}.flow-group-body{padding:0 0 8px 14px}.flow-group-body .flow-row{padding-left:8px}
@@ -179,7 +179,7 @@ const HOME_CSS = String.raw`
       .panel-head{align-items:flex-start}
       .global-market-grid,.snapshot-grid,.screener-form{grid-template-columns:1fr}
       .global-market-card,.snapshot-card,.quality-row,.compare-card,.screener-result{min-height:88px}
-      .screener-form input,.screener-form select,.screener-form button,.compare-form input,.compare-form>button{min-height:44px;font-size:16px}
+      .stock-lookup{grid-template-columns:1fr}.stock-lookup>button{width:100%}.advanced-screener>summary{align-items:flex-start;flex-direction:column}.screener-form input,.screener-form select,.screener-form button,.compare-form input,.compare-form>button{min-height:44px;font-size:16px}
       .table-panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
       .chart-toolbar{align-items:flex-start}
       .chart-tabs,.chart-indicators{width:100%}
@@ -225,15 +225,19 @@ const HOME_APP_JS = String.raw`
   const submit = form?.querySelector('button[type="submit"]');
   const themeInput = form?.querySelector("[data-screener-theme-input]");
   const themeSuggestions = form?.querySelector("[data-screener-theme-suggestions]");
-  const stockInput = form?.querySelector("[data-screener-stock-input]");
-  const stockOptions = form?.querySelector("[data-screener-stock-options]");
-  if (!form || !root || !status || !submit || !themeInput || !themeSuggestions || !stockInput || !stockOptions) return;
+  const stockInput = document.querySelector("[data-stock-lookup-input]");
+  const stockSuggestions = document.querySelector("[data-stock-lookup-suggestions]");
+  const stockLookupButton = document.querySelector("[data-stock-lookup-submit]");
+  const stockLookupStatus = document.querySelector("[data-stock-lookup-status]");
+  if (!form || !root || !status || !submit || !themeInput || !themeSuggestions || !stockInput || !stockSuggestions || !stockLookupButton || !stockLookupStatus) return;
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   const number = (value) => value === null || value === undefined ? "-" : Number(value).toLocaleString("zh-TW");
   let themeRows = [];
+  let stockRows = [];
   let themeTimer = null;
   let stockTimer = null;
   let themeRequest = 0;
+  let stockRequest = 0;
   const hideThemeSuggestions = () => {
     themeSuggestions.hidden = true;
     themeSuggestions.innerHTML = "";
@@ -271,16 +275,33 @@ const HOME_APP_JS = String.raw`
   const searchStocks = async () => {
     const keyword = stockInput.value.trim();
     if (!keyword) {
-      stockOptions.innerHTML = "";
+      stockRows = [];
+      stockSuggestions.innerHTML = "";
+      stockSuggestions.hidden = true;
+      stockInput.setAttribute("aria-expanded", "false");
+      stockLookupStatus.textContent = "可搜尋上市、上櫃、興櫃、ETF 與 TDR。";
       return;
     }
+    const requestId = ++stockRequest;
+    stockLookupStatus.textContent = "正在搜尋「" + keyword + "」...";
     try {
-      const response = await fetch("/api/stocks?keyword=" + encodeURIComponent(keyword) + "&limit=8");
+      const response = await fetch("/api/stocks/suggest?q=" + encodeURIComponent(keyword) + "&limit=15");
       const parsed = await response.json();
       if (!response.ok) throw new Error(parsed.error || "股票搜尋失敗");
-      stockOptions.innerHTML = (parsed.data || []).map((stock) => '<option value="' + esc(stock.stock_code) + '">' + esc(stock.stock_name + " / " + stock.market_type) + '</option>').join("");
+      if (requestId !== stockRequest) return;
+      stockRows = parsed.data || [];
+      stockSuggestions.innerHTML = stockRows.length
+        ? stockRows.map((stock, index) => '<button class="stock-lookup-option' + (index === 0 ? " active" : "") + '" type="button" role="option" data-stock-code="' + esc(stock.stock_code) + '" data-stock-lookup-option><strong>' + esc(stock.stock_code + " " + stock.stock_name) + '</strong><span>' + esc(stock.industry_name || "未分類") + '</span><small>' + esc([stock.market_type, stock.instrument_label].filter(Boolean).join(" / ")) + '</small></button>').join("")
+        : '<span class="stock-lookup-option"><strong>找不到相符股票</strong><span>請縮短名稱，或確認代號是否正確。</span></span>';
+      stockSuggestions.hidden = false;
+      stockInput.setAttribute("aria-expanded", "true");
+      stockLookupStatus.textContent = stockRows.length
+        ? "找到 " + stockRows.length + " 筆候選；選取後直接開啟個股資訊。"
+        : "沒有找到「" + keyword + "」；目前股票總表可能尚未同步該標的。";
     } catch (error) {
-      status.textContent = error.message;
+      stockRows = [];
+      stockSuggestions.hidden = true;
+      stockLookupStatus.textContent = error.message;
     }
   };
   const conditionSummary = (params) => {
@@ -328,7 +349,40 @@ const HOME_APP_JS = String.raw`
   });
   stockInput.addEventListener("input", () => {
     clearTimeout(stockTimer);
+    stockRows = [];
+    stockSuggestions.innerHTML = "";
+    stockSuggestions.hidden = true;
+    stockInput.setAttribute("aria-expanded", "false");
     stockTimer = setTimeout(searchStocks, 180);
+  });
+  stockInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      clearTimeout(stockTimer);
+      const first = stockSuggestions.querySelector("[data-stock-lookup-option]");
+      if (first) first.click();
+      else searchStocks();
+    } else if (event.key === "Escape") {
+      stockSuggestions.hidden = true;
+      stockInput.setAttribute("aria-expanded", "false");
+    }
+  });
+  stockLookupButton.addEventListener("click", async () => {
+    clearTimeout(stockTimer);
+    if (!stockRows.length) await searchStocks();
+    const first = stockSuggestions.querySelector("[data-stock-lookup-option]");
+    if (first) first.click();
+  });
+  stockSuggestions.addEventListener("click", (event) => {
+    const option = event.target.closest("[data-stock-lookup-option]");
+    if (!option) return;
+    clearTimeout(stockTimer);
+    stockRequest++;
+    const selected = stockRows.find((row) => String(row.stock_code) === String(option.dataset.stockCode));
+    if (selected) stockInput.value = selected.stock_code + " " + selected.stock_name;
+    stockSuggestions.hidden = true;
+    stockInput.setAttribute("aria-expanded", "false");
+    stockLookupStatus.textContent = "已選擇 " + (selected ? selected.stock_code + " " + selected.stock_name : option.dataset.stockCode) + "。";
   });
   form.querySelectorAll("[data-screener-theme-example]").forEach((button) => button.addEventListener("click", () => {
     themeInput.value = button.dataset.screenerThemeExample;
@@ -337,6 +391,10 @@ const HOME_APP_JS = String.raw`
   }));
   document.addEventListener("click", (event) => {
     if (!event.target.closest(".screener-theme-search")) hideThemeSuggestions();
+    if (!event.target.closest(".stock-lookup-search")) {
+      stockSuggestions.hidden = true;
+      stockInput.setAttribute("aria-expanded", "false");
+    }
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -366,9 +424,8 @@ const HOME_APP_JS = String.raw`
   });
   form.addEventListener("reset", () => window.setTimeout(() => {
     hideThemeSuggestions();
-    stockOptions.innerHTML = "";
     root.innerHTML = "";
-    status.textContent = "已清除條件；可輸入股票名稱、代號或題材的部分文字。";
+    status.textContent = "已清除進階條件。";
   }, 0));
 })();
 
@@ -436,7 +493,7 @@ const HOME_APP_JS = String.raw`
     }
     const requestId = ++searchRequest;
     try {
-      const response = await fetch("/api/stocks?keyword=" + encodeURIComponent(keyword) + "&limit=8");
+      const response = await fetch("/api/stocks/suggest?q=" + encodeURIComponent(keyword) + "&limit=8");
       const parsed = await response.json();
       if (!response.ok) throw new Error(parsed.error || "搜尋失敗");
       if (requestId !== searchRequest) return;
@@ -3118,7 +3175,8 @@ async function listStocks(db, url) {
   const keyword = url.searchParams.get("keyword");
   const marketType = url.searchParams.get("market_type");
   const industry = url.searchParams.get("industry");
-  const instrumentType = url.searchParams.get("instrument_type") || "stock";
+  const requestedInstrumentType = url.searchParams.get("instrument_type");
+  const instrumentType = requestedInstrumentType || (keyword ? "all" : "stock");
   const theme = url.searchParams.get("theme");
   const minPrice = toNumber(url.searchParams.get("min_price"));
   const maxPrice = toNumber(url.searchParams.get("max_price"));
@@ -3259,6 +3317,54 @@ async function listStocks(db, url) {
   return results.map((row) => ({
     ...row,
     themes: row.theme_names ? row.theme_names.split(",") : [],
+  }));
+}
+
+async function listStockSuggestions(db, url) {
+  const query = String(url.searchParams.get("q") || "").trim().slice(0, 40);
+  if (!query) return [];
+  const limit = clampInt(url.searchParams.get("limit"), 15, 1, 30);
+  const contains = sqlLike(query);
+  const prefix = `${query}%`;
+  const { results } = await db.prepare(`
+    select
+      s.stock_code,
+      s.stock_name,
+      s.market_type,
+      s.industry_code,
+      s.industry_name,
+      s.instrument_type
+    from stocks s
+    where lower(s.stock_code) like lower(?)
+       or lower(s.stock_name) like lower(?)
+    order by
+      case
+        when lower(s.stock_code) = lower(?) then 0
+        when lower(s.stock_name) = lower(?) then 1
+        when lower(s.stock_code) like lower(?) then 2
+        when lower(s.stock_name) like lower(?) then 3
+        else 4
+      end,
+      case s.instrument_type
+        when 'stock' then 0
+        when 'emerging' then 1
+        when 'etf' then 2
+        when 'tdr' then 3
+        else 4
+      end,
+      s.stock_code,
+      s.market_type
+    limit ?
+  `).bind(contains, contains, query, query, prefix, prefix, limit).all();
+  const instrumentLabels = {
+    stock: "普通股",
+    emerging: "興櫃股票",
+    etf: "ETF",
+    tdr: "TDR",
+  };
+  return (results || []).map((row) => ({
+    ...row,
+    instrument_label: instrumentLabels[row.instrument_type] || row.instrument_type || "證券",
   }));
 }
 
@@ -7856,10 +7962,16 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
     <article class="metric"><span>月營收成長</span><strong>${topRevenue.stock_name || "-"}</strong><small>YoY ${topRevenue.yoy_growth_percent ?? "-"}%</small></article>
   </section>` : ""}
   ${show("research") ? `<section class="panel" id="stock-screener" style="margin-top:16px">
-    <p class="eyebrow">Verified Stock Screener</p>
-    <div class="panel-head"><div><h2>可信度選股器</h2><p class="muted">依官方產業、已驗證題材、營收、成交額與法人累積篩選；預設只查普通股。</p></div><span class="info-dot" tabindex="0" data-tip="法人期間可選 1、5、10、20 個交易日；題材資料只採已人工核准或信心分數至少 80 的關聯。">!</span></div>
+    <p class="eyebrow">Stock Search & Advanced Screener</p>
+    <div class="panel-head"><div><h2>股票搜尋</h2><p class="muted">輸入代號或名稱的一部分，從預選結果直接開啟個股資訊；不受選股條件限制。</p></div><span class="info-dot" tabindex="0" data-tip="股票搜尋涵蓋目前總表內的上市、上櫃、興櫃、ETF 與 TDR，並依完全相符、開頭相符、部分相符排序。">!</span></div>
+    <div class="stock-lookup">
+      <div class="stock-lookup-search"><input data-stock-lookup-input autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="stock-lookup-suggestions" placeholder="例如 2330、台積、元大台灣"><div class="stock-lookup-suggestions" id="stock-lookup-suggestions" data-stock-lookup-suggestions role="listbox" hidden></div></div>
+      <button type="button" data-stock-lookup-submit>查看股票</button>
+    </div>
+    <p class="screener-status" data-stock-lookup-status role="status" aria-live="polite">可搜尋上市、上櫃、興櫃、ETF 與 TDR。</p>
+    <details class="advanced-screener">
+      <summary><span>進階條件選股</span><small>市場、產業、題材、價格、營收、成交額與法人條件</small></summary>
     <form class="screener-form" data-screener-form>
-      <label>股票代號／名稱<input name="keyword" data-screener-stock-input list="screener-stock-options" autocomplete="off" placeholder="輸入 2330 或台積電"><datalist id="screener-stock-options" data-screener-stock-options></datalist></label>
       <label>市場<select name="market_type"><option value="">全部</option><option value="上市">上市</option><option value="上櫃">上櫃</option><option value="興櫃">興櫃</option></select></label>
       <label>資產類型<select name="instrument_type"><option value="stock">普通股</option><option value="emerging">興櫃股票</option><option value="etf">ETF</option><option value="tdr">TDR</option><option value="all">全部</option></select></label>
       <label>官方產業<select name="industry"><option value="">全部</option>${industryOptions}</select></label>
@@ -7876,8 +7988,9 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
       <div class="screener-actions"><button type="submit">開始篩選</button><button class="screener-reset" type="reset">清除條件</button></div>
       <div class="screener-presets"><span>快速試用：</span><button type="button" data-screener-theme-example="CoWoS">CoWoS</button><button type="button" data-screener-theme-example="AI Server">AI Server</button><button type="button" data-screener-theme-example="散熱">散熱</button></div>
     </form>
-    <p class="screener-status" data-screener-status role="status" aria-live="polite">可輸入股票名稱、代號或題材的部分文字。</p>
+    <p class="screener-status" data-screener-status role="status" aria-live="polite">設定條件後開始篩選；這裡不會影響上方股票搜尋。</p>
     <div class="screener-results" data-screener-results></div>
+    </details>
   </section>` : ""}
   ${show("data") ? `<section class="panel" id="data-quality" style="margin-top:16px">
     <p class="eyebrow">Data Quality</p>
@@ -8064,7 +8177,7 @@ function watchlistHtml(env) {
   async function searchStocks(keyword) {
     const clean = String(keyword || "").trim();
     if (!clean || clean.length < 1 || !optionsRoot) return;
-    const items = await api("/api/stocks?keyword=" + encodeURIComponent(clean) + "&limit=12");
+    const items = await api("/api/stocks/suggest?q=" + encodeURIComponent(clean) + "&limit=12");
     optionsRoot.innerHTML = items.map((item) => '<option value="' + esc(item.stock_code + " " + item.stock_name) + '">' + esc([item.market_type, item.industry_name].filter(Boolean).join(" / ")) + '</option>').join("");
   }
   function renderLogin(message = "") {
@@ -8462,7 +8575,7 @@ function watchlistLedgerHtml(env) {
   async function searchStocks(keyword) {
     const clean = String(keyword || "").trim();
     if (!clean) return;
-    const rows = await api("/api/stocks?keyword=" + encodeURIComponent(clean) + "&limit=12");
+    const rows = await api("/api/stocks/suggest?q=" + encodeURIComponent(clean) + "&limit=12");
     optionsRoot.innerHTML = rows.map((item) => '<option value="' + esc(item.stock_code + " " + item.stock_name) + '">' + esc([item.market_type,item.industry_name].filter(Boolean).join(" / ")) + "</option>").join("");
   }
   async function loadPortfolio() {
@@ -8987,6 +9100,19 @@ export default {
             institutional_window: [1, 5, 10, 20].includes(Number(url.searchParams.get("institutional_window")))
               ? Number(url.searchParams.get("institutional_window"))
               : 1,
+          },
+        });
+      }
+
+      if (url.pathname === "/api/stocks/suggest") {
+        const data = await listStockSuggestions(db, url);
+        return json({
+          data,
+          meta: {
+            updated_at: new Date().toISOString(),
+            source: "cloudflare-d1-stock-master",
+            is_realtime: false,
+            includes_instrument_types: ["stock", "emerging", "etf", "tdr"],
           },
         });
       }

@@ -67,6 +67,15 @@ function request(path, init) {
 test("expanded stock filters and classification quality execute against the migrated schema", async () => {
   const DB = new D1TestDatabase();
   const env = { DB, ADMIN_SYNC_TOKEN: "test-secret" };
+  DB.exec(`
+    insert into stocks (
+      stock_code, stock_name, market_type, industry_code, industry_name,
+      company_type, source, source_url, last_updated_at, instrument_type
+    ) values (
+      '0050', '元大台灣50', '上市', 'ETF', 'ETF',
+      '上市ETF', 'test', 'test', '2026-07-03T00:00:00Z', 'etf'
+    )
+  `);
 
   const stocksResponse = await worker.fetch(request(
     "/api/stocks?industry=24&instrument_type=stock&institutional_window=5&flow_party=foreign&sort=institutional&limit=5",
@@ -85,6 +94,17 @@ test("expanded stock filters and classification quality execute against the migr
   assert.equal(themeSuggestionResponse.status, 200);
   const themeSuggestionPayload = await themeSuggestionResponse.json();
   assert.ok(themeSuggestionPayload.data.some((row) => row.theme_name === "CoWoS"));
+
+  const stockSuggestionResponse = await worker.fetch(request("/api/stocks/suggest?q=元大台&limit=15"), env, {});
+  assert.equal(stockSuggestionResponse.status, 200);
+  const stockSuggestionPayload = await stockSuggestionResponse.json();
+  assert.equal(stockSuggestionPayload.data[0].stock_code, "0050");
+  assert.equal(stockSuggestionPayload.data[0].instrument_label, "ETF");
+
+  const keywordResponse = await worker.fetch(request("/api/stocks?keyword=0050&limit=5"), env, {});
+  assert.equal(keywordResponse.status, 200);
+  const keywordPayload = await keywordResponse.json();
+  assert.equal(keywordPayload.data[0].stock_code, "0050", "keyword searches must not silently exclude non-common-stock instruments");
 
   const treeResponse = await worker.fetch(request("/api/stocks/tree?rows=5000&page=2"), env, {});
   assert.equal(treeResponse.status, 200);
@@ -379,7 +399,8 @@ test("homepage renders from the migrated schema within the initial HTML budget",
   const researchHtml = await researchPage.text();
   assert.match(researchHtml, /id="stock-screener"/);
   assert.match(researchHtml, /id="stock-compare"/);
-  assert.match(researchHtml, /data-screener-stock-input/);
+  assert.match(researchHtml, /data-stock-lookup-input/);
+  assert.match(researchHtml, /進階條件選股/);
   assert.match(researchHtml, /data-screener-theme-suggestions/);
   assert.match(researchHtml, /aria-live="polite"/);
   assert.doesNotMatch(researchHtml, /id="market-dashboard"/);
@@ -418,10 +439,11 @@ test("homepage renders from the migrated schema within the initial HTML budget",
   assert.match(appJsResponse.headers.get("cache-control") || "", /immutable/);
   const appJs = await appJsResponse.text();
   assert.doesNotThrow(() => new Function(appJs), "generated app.js must be valid JavaScript");
-  assert.ok(appJs.includes("/api/stocks?keyword="), "compare input must search by stock code or name");
+  assert.ok(appJs.includes("/api/stocks/suggest?q="), "all stock search inputs must use the complete stock-master suggestion endpoint");
+  assert.ok(appJs.includes("選取後直接開啟個股資訊"), "stock lookup must explain its direct-open behavior");
   assert.ok(appJs.includes("/api/themes/suggest"), "screener theme input must provide partial-text suggestions");
   assert.ok(appJs.includes("data-screener-theme-example"), "screener must expose quick examples");
-  assert.ok(appJs.includes("已清除條件"), "screener must provide a clear reset state");
+  assert.ok(appJs.includes("已清除進階條件"), "advanced screener must provide a clear reset state");
   assert.ok(appJs.includes("查看完整個股抽屜"), "compare cards must keep the stock drawer entry point");
   assert.ok(appJs.includes("data-compare-suggestion"), "compare input must expose clickable stock suggestions");
   assert.ok(appJs.includes("compare-chip"), "selected compare stocks must render as removable chips");
