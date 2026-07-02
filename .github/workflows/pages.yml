@@ -29,7 +29,7 @@ jobs:
           cp public/icons/app-icon-192.png _site/icons/app-icon-192.png
           cp public/icons/app-icon-512.png _site/icons/app-icon-512.png
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
