@@ -1,0 +1,2 @@
+-- Historical migration retained for Wrangler ordering.
+-- These columns are consolidated into 0001_schema_seed.sql for clean installs.

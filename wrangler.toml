@@ -1,0 +1,38 @@
+name = "twstock-research"
+main = "src/index.js"
+compatibility_date = "2026-06-24"
+workers_dev = false
+routes = [
+  { pattern = "claw.terry878.org", custom_domain = true }
+]
+
+[assets]
+directory = "./public"
+
+[triggers]
+crons = ["0 2,10 * * *"]
+
+[[ratelimits]]
+name = "PUBLIC_API_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 180, period = 60 }
+
+[[ratelimits]]
+name = "EXPENSIVE_API_RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "WRITE_API_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "ADMIN_API_RATE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 12, period = 60 }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "twstock-research-db"
+database_id = "2c70b7fd-f62a-4df1-9f1f-fdf2e6a42189"

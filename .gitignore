@@ -1,0 +1,12 @@
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+!.env.example
+!.dev.vars.example
+.wrangler/
+node_modules/
+*.log
+audit/
+design-qa.md
+_site/
