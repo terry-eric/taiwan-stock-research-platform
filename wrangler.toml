@@ -14,6 +14,7 @@ crons = ["0 0,2,10 * * *"]
 
 [vars]
 NOTIFICATION_FROM_EMAIL = "updates@terry878.org"
+NOTIFICATION_ADMIN_EMAIL = "admin@example.invalid"
 
 [[send_email]]
 name = "EMAIL"

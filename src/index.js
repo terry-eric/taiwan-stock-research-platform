@@ -43,7 +43,7 @@ const GLOBAL_INDEX_DEFINITIONS = [
   { symbol: "^N225", label: "日經 225", country: "日本", market: "東京市場" },
   { symbol: "^KS11", label: "KOSPI", country: "韓國", market: "韓國市場" },
 ];
-const PERFORMANCE_ASSET_VERSION = "20260703-19";
+const PERFORMANCE_ASSET_VERSION = "20260703-20";
 const PWA_HEAD = `
   <meta name="theme-color" content="#0d2f58">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -5634,7 +5634,28 @@ async function syncGlobalMarketSnapshots(db) {
   };
 }
 
-function notificationPreferencePayload(row, user, env) {
+function normalizeNotificationEmail(value) {
+  return String(value || "").trim().toLowerCase().slice(0, 254);
+}
+
+function isNotificationAdmin(user, env) {
+  const adminEmail = normalizeNotificationEmail(env.NOTIFICATION_ADMIN_EMAIL || "admin@example.invalid");
+  return normalizeNotificationEmail(user?.email) === adminEmail;
+}
+
+async function notificationAccess(db, user, env) {
+  const email = normalizeNotificationEmail(user?.email);
+  const allowed = await db.prepare(`
+    select enabled from notification_email_allowlist
+    where lower(email) = ? and enabled = 1
+  `).bind(email).first();
+  return {
+    allowed: Boolean(allowed),
+    is_admin: isNotificationAdmin(user, env),
+  };
+}
+
+function notificationPreferencePayload(row, user, env, access) {
   return {
     email: user.email,
     notify_0800: Boolean(row?.notify_0800),
@@ -5642,19 +5663,22 @@ function notificationPreferencePayload(row, user, env) {
     notify_1800: Boolean(row?.notify_1800),
     delivery_available: Boolean(env.EMAIL && env.NOTIFICATION_FROM_EMAIL),
     sender: env.NOTIFICATION_FROM_EMAIL || null,
+    can_configure_notifications: Boolean(access?.allowed || access?.is_admin),
+    is_notification_admin: Boolean(access?.is_admin),
   };
 }
 
 async function getNotificationPreferences(db, user, env) {
+  const access = await notificationAccess(db, user, env);
   const row = await db.prepare(`
     select notify_0800, notify_1000, notify_1800, updated_at
     from watchlist_notification_preferences
     where user_id = ?
   `).bind(user.id).first();
-  return { ...notificationPreferencePayload(row, user, env), updated_at: row?.updated_at || null };
+  return { ...notificationPreferencePayload(row, user, env, access), updated_at: row?.updated_at || null };
 }
 
-async function saveNotificationPreferences(db, user, env, body) {
+async function writeNotificationPreferences(db, userId, body) {
   const now = new Date().toISOString();
   const values = {
     notify_0800: body.notify_0800 === true || body.notify_0800 === 1,
@@ -5672,13 +5696,83 @@ async function saveNotificationPreferences(db, user, env, body) {
       notify_1800 = excluded.notify_1800,
       updated_at = excluded.updated_at
   `).bind(
-    user.id,
+    userId,
     values.notify_0800 ? 1 : 0,
     values.notify_1000 ? 1 : 0,
     values.notify_1800 ? 1 : 0,
     now,
   ).run();
-  return { ...notificationPreferencePayload(values, user, env), updated_at: now };
+  return { ...values, updated_at: now };
+}
+
+async function saveNotificationPreferences(db, user, env, body) {
+  const access = await notificationAccess(db, user, env);
+  if (!access.allowed && !access.is_admin) {
+    const error = new Error("此帳號尚未開放 Email 提醒功能。");
+    error.status = 403;
+    throw error;
+  }
+  const values = await writeNotificationPreferences(db, user.id, body);
+  return { ...notificationPreferencePayload(values, user, env, access), updated_at: values.updated_at };
+}
+
+async function listNotificationRecipients(db) {
+  const { results } = await db.prepare(`
+    select
+      a.email,
+      a.enabled,
+      a.added_by,
+      a.updated_at,
+      u.id as user_id,
+      u.name,
+      u.last_login_at,
+      coalesce(p.notify_0800, 0) as notify_0800,
+      coalesce(p.notify_1000, 0) as notify_1000,
+      coalesce(p.notify_1800, 0) as notify_1800
+    from notification_email_allowlist a
+    left join watchlist_users u on lower(u.email) = lower(a.email)
+    left join watchlist_notification_preferences p on p.user_id = u.id
+    order by a.enabled desc, coalesce(u.last_login_at, a.updated_at) desc, a.email
+  `).all();
+  return (results || []).map((row) => ({
+    ...row,
+    enabled: Boolean(row.enabled),
+    registered: Boolean(row.user_id),
+    notify_0800: Boolean(row.notify_0800),
+    notify_1000: Boolean(row.notify_1000),
+    notify_1800: Boolean(row.notify_1800),
+  }));
+}
+
+async function upsertNotificationRecipient(db, adminUser, body) {
+  const email = normalizeNotificationEmail(body.email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const error = new Error("請輸入有效的 Email。");
+    error.status = 400;
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const enabled = body.enabled !== false && body.enabled !== 0;
+  if (!enabled && ["admin@example.invalid", "member@example.invalid"].includes(email)) {
+    const error = new Error("預設允許的 Email 不可停用。");
+    error.status = 400;
+    throw error;
+  }
+  await db.prepare(`
+    insert into notification_email_allowlist (email, enabled, added_by, created_at, updated_at)
+    values (?, ?, ?, ?, ?)
+    on conflict(email) do update set
+      enabled = excluded.enabled,
+      added_by = excluded.added_by,
+      updated_at = excluded.updated_at
+  `).bind(email, enabled ? 1 : 0, normalizeNotificationEmail(adminUser.email), now, now).run();
+  const target = await db.prepare(`
+    select id, email, name from watchlist_users where lower(email) = ? limit 1
+  `).bind(email).first();
+  if (target && ["notify_0800", "notify_1000", "notify_1800"].some((key) => key in body)) {
+    await writeNotificationPreferences(db, target.id, body);
+  }
+  return { email, enabled, registered: Boolean(target) };
 }
 
 function signedNumber(value, digits = 2) {
@@ -5761,10 +5855,8 @@ async function sendScheduledUpdateNotifications(db, env, slot, report, scheduled
     select u.id, u.email, u.name
     from watchlist_notification_preferences p
     join watchlist_users u on u.id = p.user_id
+    join notification_email_allowlist a on lower(a.email) = lower(u.email) and a.enabled = 1
     where p.${column} = 1
-      and exists (
-        select 1 from watchlist_transactions wt where wt.user_id = u.id
-      )
     order by u.id
     limit 500
   `).all();
@@ -8263,7 +8355,7 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
       <article class="guide-card"><h2>4. 個股圖表</h2><ul><li>日線、月線、年線可切換。</li><li>移動平均線 MA 與布林通道 BOLL 可個別勾選。</li><li>新聞只保留與股票代號、公司名稱或 ticker 相符的高可信來源。</li></ul></article>
       <article class="guide-card"><h2>5. 個股比較</h2><ol><li>逐一輸入股票代號或名稱。</li><li>點選預選項目加入比較框。</li><li>加入 2–4 檔後，比較價格、估值、營收、法人、題材與評分。</li></ol></article>
       <article class="guide-card"><h2>6. 交易帳本</h2><ol><li>使用 Google 帳號登入。</li><li>選擇買入／賣出、交易模式、股或張、價格與費率。</li><li>系統依加權平均成本計算庫存、已實現與未實現損益；每筆歷史可個別刪除。</li></ol></article>
-      <article class="guide-card"><h2>7. Email 更新提醒</h2><ol><li>在交易帳本勾選 08:00、10:00、18:00，可複選。</li><li>按「儲存提醒設定」。</li><li>郵件會列出本次更新內容、主要變動與失敗來源，寄到 Google 登入信箱。</li></ol></article>
+      <article class="guide-card"><h2>7. Email 更新提醒</h2><ol><li>提醒功能只開放白名單帳號；未開放時選項會呈灰色。</li><li>獲授權後可勾選 08:00、10:00、18:00，並可複選。</li><li>提醒管理員可新增特定 Email，並替已登入帳號設定時段。</li><li>郵件會列出本次更新內容、主要變動與失敗來源。</li></ol></article>
       <article class="guide-card"><h2>8. 資料限制</h2><ul><li>本站是盤後研究工具，不是即時下單系統。</li><li>官方來源尚未公告、同步失敗或涵蓋不足時會顯示資料不足。</li><li>評分與題材僅供研究，不構成投資建議；投資盈虧由使用者自行承擔。</li></ul></article>
     </div>
   </section>` : ""}
@@ -8658,8 +8750,8 @@ function watchlistLedgerHtml(env) {
     form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}label{display:grid;gap:5px;min-width:0;color:var(--muted);font-size:.78rem;font-weight:900}.wide{grid-column:span 2}input,select{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit;background:#fff}button{border:0;border-radius:8px;background:var(--green);color:#fff;font-weight:800;padding:10px 14px;cursor:pointer}button.secondary{background:#eef3ef;color:var(--ink)}button.danger{background:#f7e7e4;color:#9d2f26}button:disabled{cursor:not-allowed;opacity:.55}.form-status{grid-column:1/-1;min-height:20px;color:var(--muted)}form>[type="submit"]{grid-column:1/-1;justify-self:start;min-width:150px}.cost-preview{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:10px;background:#fbfcf8}.cost-preview b{border-radius:999px;padding:4px 8px;background:#eef3ef;font-size:.78rem}.fee-help{margin:8px 0 18px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfcf8}.fee-help summary{cursor:pointer;color:var(--green);font-weight:900}.fee-help p{margin-top:8px;color:var(--muted);line-height:1.65}.fee-help a{color:var(--blue)}
     .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.summary-card{border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.summary-card span,.summary-card small{display:block;color:var(--muted);font-size:.76rem}.summary-card strong{display:block;margin:5px 0;font-size:1.1rem}.up{color:var(--red)!important}.down{color:var(--green)!important}
     .position-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.position{display:block;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff}.position a{display:block;color:inherit;text-decoration:none}.position small{display:block;color:var(--muted);line-height:1.55}.profit-box{display:grid;gap:4px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}.alert-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.alert-list b{border:1px solid rgba(11,127,95,.24);border-radius:999px;padding:3px 7px;background:rgba(11,127,95,.08);color:var(--green);font-size:.74rem}.empty{border:1px dashed var(--line);border-radius:8px;padding:24px;text-align:center;color:var(--muted)}
-    .history{display:grid;gap:10px;margin-top:10px}.stock-ledger{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}.stock-ledger>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;list-style:none}.stock-ledger>summary::-webkit-details-marker{display:none}.stock-ledger>summary::after{content:"展開";flex:none;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--green);font-size:.72rem;font-weight:900}.stock-ledger[open]>summary::after{content:"收合"}.ledger-title{display:grid;gap:3px;min-width:0}.ledger-title strong{font-size:1rem}.ledger-title small,.ledger-meta{color:var(--muted);font-size:.76rem}.ledger-meta{text-align:right;line-height:1.5}.ledger-transactions{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid var(--line)}.transaction{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.ledger-transactions .transaction:first-child{margin-top:12px}.side-chip{display:inline-flex;border-radius:999px;padding:4px 8px;color:#fff;font-size:.76rem;font-weight:900}.side-buy{background:var(--red)}.side-sell{background:var(--green)}.transaction strong,.transaction small{display:block}.transaction small{margin-top:3px;color:var(--muted);line-height:1.5}.auto-refresh-note{display:block;margin:8px 0 14px;color:var(--muted);font-size:.78rem}.config-hint{border:1px dashed var(--line);border-radius:8px;padding:12px;background:#fbfcf8}.config-hint code{display:block;margin-top:8px;padding:8px;border-radius:6px;background:#eef3ef}.google-disabled{width:100%;background:#eef3ef;color:var(--muted);cursor:not-allowed}.notification-settings{margin-bottom:18px;border:1px solid rgba(40,109,168,.22);border-radius:8px;padding:14px;background:rgba(40,109,168,.05)}.notification-settings h2{margin-bottom:5px}.notification-options{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.notification-option{display:flex;grid-template-columns:none;align-items:flex-start;gap:8px;min-width:190px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff;color:var(--ink);cursor:pointer}.notification-option input{width:18px;height:18px;margin:1px 0 0;accent-color:var(--green)}.notification-option span{display:grid;gap:2px}.notification-option small{color:var(--muted);font-weight:700;line-height:1.4}.notification-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.notification-status{color:var(--muted);font-size:.8rem;font-weight:800}
-    @media(max-width:900px){form{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:1/-1}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.hero,.position-grid,form{grid-template-columns:1fr}.wide{grid-column:auto}.nav{align-items:flex-start;flex-direction:column}.summary-grid{grid-template-columns:1fr 1fr}.transaction{grid-template-columns:auto minmax(0,1fr)}.transaction .danger{grid-column:1/-1}.trade-tabs button{flex:1;min-width:0}.stock-ledger>summary{align-items:flex-start}.ledger-meta{text-align:left}.stock-ledger>summary::after{margin-left:auto}}@media(max-width:430px){.summary-grid{grid-template-columns:1fr}.stock-ledger>summary{display:grid;grid-template-columns:minmax(0,1fr) auto}.ledger-meta{grid-column:1/-1}}
+    .history{display:grid;gap:10px;margin-top:10px}.stock-ledger{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}.stock-ledger>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;list-style:none}.stock-ledger>summary::-webkit-details-marker{display:none}.stock-ledger>summary::after{content:"展開";flex:none;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--green);font-size:.72rem;font-weight:900}.stock-ledger[open]>summary::after{content:"收合"}.ledger-title{display:grid;gap:3px;min-width:0}.ledger-title strong{font-size:1rem}.ledger-title small,.ledger-meta{color:var(--muted);font-size:.76rem}.ledger-meta{text-align:right;line-height:1.5}.ledger-transactions{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid var(--line)}.transaction{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.ledger-transactions .transaction:first-child{margin-top:12px}.side-chip{display:inline-flex;border-radius:999px;padding:4px 8px;color:#fff;font-size:.76rem;font-weight:900}.side-buy{background:var(--red)}.side-sell{background:var(--green)}.transaction strong,.transaction small{display:block}.transaction small{margin-top:3px;color:var(--muted);line-height:1.5}.auto-refresh-note{display:block;margin:8px 0 14px;color:var(--muted);font-size:.78rem}.config-hint{border:1px dashed var(--line);border-radius:8px;padding:12px;background:#fbfcf8}.config-hint code{display:block;margin-top:8px;padding:8px;border-radius:6px;background:#eef3ef}.google-disabled{width:100%;background:#eef3ef;color:var(--muted);cursor:not-allowed}.notification-settings{margin-bottom:18px;border:1px solid rgba(40,109,168,.22);border-radius:8px;padding:14px;background:rgba(40,109,168,.05)}.notification-settings h2{margin-bottom:5px}.notification-settings.notification-locked{border-color:var(--line);background:#f0f2f0;color:var(--muted)}.notification-settings.notification-locked .notification-option{background:#e8ebe8;cursor:not-allowed;opacity:.72}.notification-options{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.notification-option{display:flex;grid-template-columns:none;align-items:flex-start;gap:8px;min-width:190px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff;color:var(--ink);cursor:pointer}.notification-option input{width:18px;height:18px;margin:1px 0 0;accent-color:var(--green)}.notification-option span{display:grid;gap:2px}.notification-option small{color:var(--muted);font-weight:700;line-height:1.4}.notification-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.notification-status{color:var(--muted);font-size:.8rem;font-weight:800}.notification-admin{margin:12px 0 20px;border:1px solid rgba(11,127,95,.25);border-radius:8px;padding:14px;background:#f7fbf8}.notification-admin-create{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:10px 0}.notification-admin-list{display:grid;gap:8px}.notification-recipient{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.notification-recipient strong,.notification-recipient small{display:block}.notification-recipient small{color:var(--muted);line-height:1.45}.notification-recipient-slots{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.notification-recipient-slots label{display:flex;align-items:center;gap:4px;color:var(--ink)}.notification-recipient-slots input{width:16px;height:16px}.notification-recipient-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.notification-recipient-actions .danger{padding:8px 10px}
+    @media(max-width:900px){form{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:1/-1}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.hero,.position-grid,form{grid-template-columns:1fr}.wide{grid-column:auto}.nav{align-items:flex-start;flex-direction:column}.summary-grid{grid-template-columns:1fr 1fr}.transaction{grid-template-columns:auto minmax(0,1fr)}.transaction .danger{grid-column:1/-1}.trade-tabs button{flex:1;min-width:0}.stock-ledger>summary{align-items:flex-start}.ledger-meta{text-align:left}.stock-ledger>summary::after{margin-left:auto}.notification-admin-create,.notification-recipient{grid-template-columns:1fr}.notification-recipient-actions{justify-content:flex-start}}@media(max-width:430px){.summary-grid{grid-template-columns:1fr}.stock-ledger>summary{display:grid;grid-template-columns:minmax(0,1fr) auto}.ledger-meta{grid-column:1/-1}}
   </style>
   ${clientId ? '<script src="https://accounts.google.com/gsi/client" async defer></script>' : ''}
 </head>
@@ -8670,7 +8762,7 @@ function watchlistLedgerHtml(env) {
     <aside class="panel login-box" data-auth></aside>
   </section>
   <section class="panel" style="margin-top:16px" data-app hidden>
-    <div class="notification-settings">
+    <div class="notification-settings" data-notification-settings>
       <h2>更新 Email 提醒</h2>
       <p class="muted">寄送到 Google 登入信箱；可複選時段。郵件會列出本次更新內容、主要變動及失敗來源。</p>
       <div class="notification-options">
@@ -8679,6 +8771,13 @@ function watchlistLedgerHtml(env) {
         <label class="notification-option"><input type="checkbox" data-notify-slot="notify_1800"><span><strong>18:00</strong><small>行情、估值、法人與評分</small></span></label>
       </div>
       <div class="notification-actions"><button type="button" data-save-notifications>儲存提醒設定</button><span class="notification-status" data-notification-status role="status" aria-live="polite"></span></div>
+    </div>
+    <div class="notification-admin" data-notification-admin hidden>
+      <h2>特定收件人管理</h2>
+      <p class="muted">僅提醒管理員可見。新增已登入的 Email 後，可直接替該帳號設定提醒時段；尚未登入的 Email 會先保留資格。</p>
+      <div class="notification-admin-create"><input type="email" data-notification-admin-email placeholder="輸入要開放提醒的 Email"><button type="button" data-notification-admin-add>新增 Email</button></div>
+      <div class="notification-admin-list" data-notification-admin-list></div>
+      <span class="notification-status" data-notification-admin-status role="status" aria-live="polite"></span>
     </div>
     <h2>新增交易</h2>
     <div class="trade-tabs" role="tablist" aria-label="交易方向"><button type="button" class="active" data-side="buy">買入</button><button type="button" data-side="sell">賣出</button></div>
@@ -8729,9 +8828,15 @@ function watchlistLedgerHtml(env) {
   const optionsRoot = document.querySelector("[data-stock-options]");
   const status = document.querySelector("[data-form-status]");
   const refreshStatus = document.querySelector("[data-refresh-status]");
+  const notificationSettings = document.querySelector("[data-notification-settings]");
   const notificationStatus = document.querySelector("[data-notification-status]");
   const notificationSave = document.querySelector("[data-save-notifications]");
   const notificationSlots = Array.from(document.querySelectorAll("[data-notify-slot]"));
+  const notificationAdmin = document.querySelector("[data-notification-admin]");
+  const notificationAdminEmail = document.querySelector("[data-notification-admin-email]");
+  const notificationAdminAdd = document.querySelector("[data-notification-admin-add]");
+  const notificationAdminList = document.querySelector("[data-notification-admin-list]");
+  const notificationAdminStatus = document.querySelector("[data-notification-admin-status]");
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   const number = (value, digits = 2) => value === null || value === undefined || value === "" ? "-" : Number(value).toLocaleString("zh-TW", { maximumFractionDigits: digits });
   const twd = (value) => value === null || value === undefined ? "-" : (Number(value) > 0 ? "+" : Number(value) < 0 ? "-" : "") + Math.abs(Math.round(Number(value))).toLocaleString("zh-TW") + " 元";
@@ -8923,9 +9028,18 @@ function watchlistLedgerHtml(env) {
   async function loadNotificationPreferences() {
     const data = await api("/api/watchlist/notifications");
     notificationSlots.forEach((input) => { input.checked = Boolean(data[input.dataset.notifySlot]); });
-    notificationStatus.textContent = data.delivery_available
-      ? "寄送信箱：" + data.email
-      : "設定可先保存；Cloudflare Email Service 尚未完成寄件網域啟用。";
+    const canConfigure = Boolean(data.can_configure_notifications);
+    notificationSettings.classList.toggle("notification-locked", !canConfigure);
+    notificationSettings.setAttribute("aria-disabled", canConfigure ? "false" : "true");
+    notificationSlots.forEach((input) => { input.disabled = !canConfigure; });
+    notificationSave.disabled = !canConfigure;
+    notificationStatus.textContent = !canConfigure
+      ? "此 Google 帳號尚未獲得 Email 提醒權限，請聯絡提醒管理員。"
+      : data.delivery_available
+        ? "寄送信箱：" + data.email
+        : "設定可先保存；Cloudflare Email Service 尚未完成寄件網域啟用。";
+    notificationAdmin.hidden = !data.is_notification_admin;
+    if (data.is_notification_admin) await loadNotificationRecipients();
   }
   async function saveNotificationPreferencesUI() {
     notificationSave.disabled = true;
@@ -8939,6 +9053,22 @@ function watchlistLedgerHtml(env) {
     } finally {
       notificationSave.disabled = false;
     }
+  }
+  function renderNotificationRecipients(rows) {
+    const protectedEmails = new Set(["admin@example.invalid","member@example.invalid"]);
+    notificationAdminList.innerHTML = rows.length ? rows.map((row) => {
+      const email = String(row.email || "");
+      const locked = protectedEmails.has(email.toLowerCase());
+      return '<article class="notification-recipient" data-notification-recipient="' + esc(email) + '"><div><strong>' + esc(email) + '</strong><small>' + esc(row.registered ? (row.name || "已登入帳號") : "尚未使用 Google 登入；登入後才可設定時段") + '</small>' + (row.registered ? '<div class="notification-recipient-slots"><label><input type="checkbox" data-recipient-slot="notify_0800"' + (row.notify_0800 ? " checked" : "") + '>08:00</label><label><input type="checkbox" data-recipient-slot="notify_1000"' + (row.notify_1000 ? " checked" : "") + '>10:00</label><label><input type="checkbox" data-recipient-slot="notify_1800"' + (row.notify_1800 ? " checked" : "") + '>18:00</label></div>' : "") + '</div><div class="notification-recipient-actions">' + (row.registered ? '<button type="button" data-save-recipient>儲存此人提醒</button>' : "") + (locked ? "" : '<button type="button" class="danger" data-disable-recipient>停用</button>') + '</div></article>';
+    }).join("") : '<div class="empty">目前沒有允許提醒的 Email。</div>';
+  }
+  async function loadNotificationRecipients() {
+    const rows = await api("/api/watchlist/notification-recipients");
+    renderNotificationRecipients(rows);
+  }
+  async function updateNotificationRecipient(payload) {
+    const rows = await api("/api/watchlist/notification-recipients", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
+    renderNotificationRecipients(rows);
   }
   async function boot() {
     try { const user = await api("/api/auth/me"); renderUser(user); app.hidden = false; await Promise.all([loadPortfolio(), loadNotificationPreferences()]); }
@@ -8999,6 +9129,35 @@ function watchlistLedgerHtml(env) {
     renderPortfolio(data);
   });
   notificationSave.addEventListener("click", saveNotificationPreferencesUI);
+  notificationAdminAdd.addEventListener("click", async() => {
+    const email = notificationAdminEmail.value.trim();
+    if (!email) { notificationAdminStatus.textContent = "請輸入 Email。"; return; }
+    notificationAdminAdd.disabled = true;
+    try {
+      await updateNotificationRecipient({email, enabled:true});
+      notificationAdminEmail.value = "";
+      notificationAdminStatus.textContent = "已開放 " + email + " 的提醒權限。";
+    } catch(error) {
+      notificationAdminStatus.textContent = error.message;
+    } finally {
+      notificationAdminAdd.disabled = false;
+    }
+  });
+  notificationAdminList.addEventListener("click", async(event) => {
+    const item = event.target.closest("[data-notification-recipient]");
+    if (!item) return;
+    const email = item.dataset.notificationRecipient;
+    if (event.target.closest("[data-save-recipient]")) {
+      const payload = {email, enabled:true};
+      item.querySelectorAll("[data-recipient-slot]").forEach((input) => { payload[input.dataset.recipientSlot] = input.checked; });
+      try { await updateNotificationRecipient(payload); notificationAdminStatus.textContent = "已更新 " + email + " 的提醒時段。"; }
+      catch(error) { notificationAdminStatus.textContent = error.message; }
+    }
+    if (event.target.closest("[data-disable-recipient]")) {
+      try { await updateNotificationRecipient({email, enabled:false}); notificationAdminStatus.textContent = "已停用 " + email + "。"; }
+      catch(error) { notificationAdminStatus.textContent = error.message; }
+    }
+  });
   stockInput.addEventListener("input",() => { clearTimeout(timer); timer = setTimeout(() => searchStocks(stockInput.value).catch(() => null),180); });
   form.elements.trade_date.value = new Date().toISOString().slice(0,10);
   setSide("buy");
@@ -9181,8 +9340,34 @@ export default {
         const user = await currentWatchlistUser(db, request);
         if (!user) return json({ error: "unauthorized" }, 401);
         const body = await request.json().catch(() => ({}));
-        const data = await saveNotificationPreferences(db, user, env, body);
-        return json({ data, meta: { updated_at: data.updated_at, source: "cloudflare-d1", is_realtime: false } });
+        try {
+          const data = await saveNotificationPreferences(db, user, env, body);
+          return json({ data, meta: { updated_at: data.updated_at, source: "cloudflare-d1", is_realtime: false } });
+        } catch (error) {
+          return json({ error: error.message || "notification preference update failed" }, error.status || 500);
+        }
+      }
+
+      if (url.pathname === "/api/watchlist/notification-recipients" && request.method === "GET") {
+        const user = await currentWatchlistUser(db, request);
+        if (!user) return json({ error: "unauthorized" }, 401);
+        if (!isNotificationAdmin(user, env)) return json({ error: "forbidden" }, 403);
+        const data = await listNotificationRecipients(db);
+        return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
+      }
+
+      if (url.pathname === "/api/watchlist/notification-recipients" && ["POST", "PUT"].includes(request.method)) {
+        const user = await currentWatchlistUser(db, request);
+        if (!user) return json({ error: "unauthorized" }, 401);
+        if (!isNotificationAdmin(user, env)) return json({ error: "forbidden" }, 403);
+        const body = await request.json().catch(() => ({}));
+        try {
+          await upsertNotificationRecipient(db, user, body);
+          const data = await listNotificationRecipients(db);
+          return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
+        } catch (error) {
+          return json({ error: error.message || "notification recipient update failed" }, error.status || 500);
+        }
       }
 
       if (url.pathname === "/api/watchlist/transactions" && request.method === "POST") {

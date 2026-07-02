@@ -1,10 +1,10 @@
-const CACHE_NAME = "twstock-shell-20260703-19";
+const CACHE_NAME = "twstock-shell-20260703-20";
 const SHELL_ASSETS = [
   "/",
-  "/assets/app.css?v=20260703-19",
-  "/assets/app.js?v=20260703-19",
-  "/assets/lazy-trees.js?v=20260703-19",
-  "/assets/pwa.js?v=20260703-19",
+  "/assets/app.css?v=20260703-20",
+  "/assets/app.js?v=20260703-20",
+  "/assets/lazy-trees.js?v=20260703-20",
+  "/assets/pwa.js?v=20260703-20",
   "/manifest.webmanifest",
   "/icons/app-icon-192.png",
   "/icons/app-icon-512.png"

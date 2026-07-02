@@ -25,6 +25,8 @@
 - 台灣時間 10:00：月營收、加權指數、除權息；週日同步股票名冊。
 - 台灣時間 18:00：收盤行情、估值、三大法人與評分。
 - 交易帳本使用者可複選三個時段，通知寄到 Google 登入信箱。
+- 提醒採 Email 白名單；預設只允許 `admin@example.invalid` 與 `member@example.invalid`。
+- `admin@example.invalid` 可在交易帳本管理特定收件人與個別提醒時段。
 - 寄信使用 Cloudflare `send_email` binding，不在程式碼或 GitHub 保存 API 金鑰。
 - 正式寄信前須在 Cloudflare Email Service 啟用 `terry878.org` 寄件網域；任意收件人寄送需要符合 Cloudflare 方案與額度。
 

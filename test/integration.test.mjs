@@ -904,15 +904,21 @@ test("watchlist update email preferences support multiple selected times", async
   const DB = new D1TestDatabase();
   DB.exec(`
     insert into watchlist_users (google_sub, email, name, picture, created_at, last_login_at)
-    values ('notify-user', 'notify@example.test', 'Notify User', '', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+    values ('notify-user', 'admin@example.invalid', 'Notify Admin', '', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
     insert into watchlist_sessions (user_id, token, created_at, expires_at, user_agent)
     select id, 'notify-token', '2026-01-01T00:00:00Z', '2099-01-01T00:00:00Z', 'test'
     from watchlist_users where google_sub = 'notify-user';
+    insert into watchlist_users (google_sub, email, name, picture, created_at, last_login_at)
+    values ('outsider-user', 'outsider@example.test', 'Outsider', '', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+    insert into watchlist_sessions (user_id, token, created_at, expires_at, user_agent)
+    select id, 'outsider-token', '2026-01-01T00:00:00Z', '2099-01-01T00:00:00Z', 'test'
+    from watchlist_users where google_sub = 'outsider-user';
   `);
   const env = {
     DB,
     EMAIL: { send: async () => ({ messageId: "test-message" }) },
     NOTIFICATION_FROM_EMAIL: "updates@example.test",
+    NOTIFICATION_ADMIN_EMAIL: "admin@example.invalid",
   };
   const headers = { cookie: "twstock_watchlist=notify-token", "content-type": "application/json" };
   const saveResponse = await worker.fetch(request("/api/watchlist/notifications", {
@@ -926,7 +932,9 @@ test("watchlist update email preferences support multiple selected times", async
   assert.equal(saved.data.notify_1000, false);
   assert.equal(saved.data.notify_1800, true);
   assert.equal(saved.data.delivery_available, true);
-  assert.equal(saved.data.email, "notify@example.test");
+  assert.equal(saved.data.email, "admin@example.invalid");
+  assert.equal(saved.data.can_configure_notifications, true);
+  assert.equal(saved.data.is_notification_admin, true);
 
   const readResponse = await worker.fetch(request("/api/watchlist/notifications", {
     headers: { cookie: "twstock_watchlist=notify-token" },
@@ -940,6 +948,53 @@ test("watchlist update email preferences support multiple selected times", async
 
   const unauthorized = await worker.fetch(request("/api/watchlist/notifications"), env, {});
   assert.equal(unauthorized.status, 401);
+
+  const outsiderHeaders = { cookie: "twstock_watchlist=outsider-token", "content-type": "application/json" };
+  const outsiderRead = await worker.fetch(request("/api/watchlist/notifications", {
+    headers: { cookie: "twstock_watchlist=outsider-token" },
+  }), env, {});
+  assert.equal(outsiderRead.status, 200);
+  const outsiderReadPayload = await outsiderRead.json();
+  assert.equal(outsiderReadPayload.data.can_configure_notifications, false);
+  const outsiderSave = await worker.fetch(request("/api/watchlist/notifications", {
+    method: "PUT",
+    headers: outsiderHeaders,
+    body: JSON.stringify({ notify_0800: true }),
+  }), env, {});
+  assert.equal(outsiderSave.status, 403);
+
+  const recipientsBefore = await worker.fetch(request("/api/watchlist/notification-recipients", {
+    headers: { cookie: "twstock_watchlist=notify-token" },
+  }), env, {});
+  assert.equal(recipientsBefore.status, 200);
+  const recipientsBeforePayload = await recipientsBefore.json();
+  assert.deepEqual(
+    recipientsBeforePayload.data.map((row) => row.email).sort(),
+    ["member@example.invalid", "admin@example.invalid"],
+  );
+
+  const allowOutsider = await worker.fetch(request("/api/watchlist/notification-recipients", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ email: "outsider@example.test", enabled: true, notify_0800: true, notify_1800: true }),
+  }), env, {});
+  assert.equal(allowOutsider.status, 200);
+  const allowOutsiderPayload = await allowOutsider.json();
+  const outsiderRecipient = allowOutsiderPayload.data.find((row) => row.email === "outsider@example.test");
+  assert.equal(outsiderRecipient.registered, true);
+  assert.equal(outsiderRecipient.notify_0800, true);
+  assert.equal(outsiderRecipient.notify_1800, true);
+
+  const outsiderReadAfter = await worker.fetch(request("/api/watchlist/notifications", {
+    headers: { cookie: "twstock_watchlist=outsider-token" },
+  }), env, {});
+  const outsiderReadAfterPayload = await outsiderReadAfter.json();
+  assert.equal(outsiderReadAfterPayload.data.can_configure_notifications, true);
+
+  const outsiderAdminList = await worker.fetch(request("/api/watchlist/notification-recipients", {
+    headers: { cookie: "twstock_watchlist=outsider-token" },
+  }), env, {});
+  assert.equal(outsiderAdminList.status, 403);
 });
 
 test("scheduled update email describes updated content, changes, and failures", () => {
@@ -1013,6 +1068,11 @@ test("watchlist page exposes buy sell tabs and valid ledger JavaScript", async (
   assert.match(html, /data-notify-slot="notify_1000"/);
   assert.match(html, /data-notify-slot="notify_1800"/);
   assert.match(html, /\/api\/watchlist\/notifications/);
+  assert.match(html, /特定收件人管理/);
+  assert.match(html, /data-notification-admin/);
+  assert.match(html, /can_configure_notifications/);
+  assert.match(html, /notification-locked/);
+  assert.match(html, /\/api\/watchlist\/notification-recipients/);
   assert.match(html, /手動輸入手續費/);
   assert.match(html, /合格現股當沖 0\.15%/);
   const inlineScript = html.match(/<script>\s*([\s\S]*?)<\/script>/)?.[1] || "";
