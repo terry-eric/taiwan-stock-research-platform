@@ -43,7 +43,7 @@ const GLOBAL_INDEX_DEFINITIONS = [
   { symbol: "^N225", label: "日經 225", country: "日本", market: "東京市場" },
   { symbol: "^KS11", label: "KOSPI", country: "韓國", market: "韓國市場" },
 ];
-const PERFORMANCE_ASSET_VERSION = "20260703-17";
+const PERFORMANCE_ASSET_VERSION = "20260703-19";
 const PWA_HEAD = `
   <meta name="theme-color" content="#0d2f58">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -98,7 +98,7 @@ const PWA_JS = String.raw`
 const HOME_CSS = String.raw`
     :root{--bg:#f6f7f2;--panel:#fff;--ink:#1d252b;--muted:#64727a;--line:#dce2dc;--red:#d94a3a;--green:#1f7a5a;--gold:#a8791a;--blue:#286da8;--shadow:0 18px 45px rgba(29,37,43,.08)}
     *{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}main{width:min(1260px,calc(100% - 32px));margin:0 auto;padding-bottom:40px}
-    .nav{display:flex;gap:8px;overflow:auto;padding:12px 0}.nav a,.nav button{border:1px solid var(--line);border-radius:6px;padding:9px 12px;background:#fff;text-decoration:none;color:inherit;font:inherit;font-weight:800;white-space:nowrap;cursor:pointer}.nav button{color:#fff;background:var(--green)}.nav button:disabled{cursor:wait;opacity:.65}
+    .nav{display:flex;gap:8px;overflow:auto;padding:12px 0}.nav a,.nav button{border:1px solid var(--line);border-radius:6px;padding:9px 12px;background:#fff;text-decoration:none;color:inherit;font:inherit;font-weight:800;white-space:nowrap;cursor:pointer}.nav button{color:#fff;background:var(--green)}.nav button:disabled{cursor:wait;opacity:.65}.nav-account{display:flex;gap:8px;margin-left:auto}.nav-account a:first-child{border-color:rgba(40,109,168,.3);color:var(--blue)}.nav-account a:last-child{border-color:var(--green);color:#fff;background:var(--green)}
     .hero{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:end;padding:30px 0 18px}.eyebrow{margin:0 0 7px;color:var(--green);font-size:.78rem;font-weight:900;text-transform:uppercase;letter-spacing:0}h1{max-width:880px;margin:0 0 12px;font-size:clamp(2rem,4.5vw,4.8rem);line-height:1.04}p{color:var(--muted);line-height:1.75}
     .panel,.metric,.table-panel,.update{border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.93);box-shadow:var(--shadow)}.update{display:grid;gap:8px;overflow-x:auto;padding:16px}.update small{font-size:.76rem;white-space:nowrap}.grid{display:grid;gap:14px}.grid-2{grid-template-columns:1fr 1fr}.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}.panel{padding:18px}.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.panel-head h2{margin-top:0}.info-dot{position:relative;display:inline-grid;place-items:center;flex:0 0 auto;width:26px;height:26px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--green);font-weight:900;cursor:help}.info-dot:hover::after,.info-dot:focus::after{content:attr(data-tip);position:absolute;right:0;top:32px;z-index:20;width:min(320px,80vw);border:1px solid var(--line);border-radius:6px;padding:10px;background:#fff;color:var(--ink);box-shadow:var(--shadow);font-size:.82rem;line-height:1.55;text-align:left}.metric{min-height:128px;padding:16px}.metric span,.metric small,.muted{color:var(--muted)}.metric strong{display:block;margin:9px 0;font-size:1.3rem}.market-snapshot{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px;margin:0 0 16px}.snapshot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.snapshot-card{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff;text-decoration:none;color:inherit}.snapshot-card span,.snapshot-card small{color:var(--muted)}.snapshot-card strong{font-size:1.04rem;overflow-wrap:anywhere}.global-market{margin:0 0 16px}.global-market-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-top:12px}.global-market-card{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.global-market-card span,.global-market-card small{color:var(--muted)}.global-market-card strong{font-size:1.08rem;overflow-wrap:anywhere}.global-market-card em{font-style:normal;font-size:.82rem;font-weight:900}.global-market-source{margin:10px 0 0;color:var(--muted);font-size:.76rem}.flow-buy-text{color:var(--red);font-weight:900}.flow-sell-text{color:var(--green);font-weight:900}.taiex-card strong{font-size:1.45rem}.server-k-chart{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px}.server-k-chart:focus-visible{outline:2px solid rgba(40,109,168,.35);outline-offset:2px}.chart-value-strip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;color:var(--muted);font-size:.82rem}.chart-value-strip strong{color:var(--ink)}.chart-zoom-controls{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 8px}.chart-zoom-controls span{margin-right:auto;color:var(--muted);font-size:.76rem;font-weight:800}.chart-zoom-controls button{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:6px;padding:0;background:#fff;color:var(--ink);font:inherit;font-size:1rem;font-weight:900;cursor:pointer}.chart-zoom-controls button:hover{border-color:var(--blue);color:var(--blue)}.chart-zoom-controls button:disabled{opacity:.35;cursor:not-allowed}.chart-plot,.market-volume-plot{display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:8px;align-items:stretch}.chart-price-scale{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;min-width:72px;padding:4px 0 22px;pointer-events:none}.chart-price-scale span,.market-volume-scale span{border:1px solid rgba(29,37,43,.1);border-radius:999px;padding:2px 6px;background:rgba(255,255,255,.92);color:var(--ink);font-size:.72rem;font-weight:900;white-space:nowrap}.chart-plot>svg{display:block;width:100%;height:160px;background:#fff;border:1px solid rgba(220,226,220,.8);border-bottom-color:var(--line)}.market-volume-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin:8px 80px 4px 0;color:var(--muted);font-size:.75rem}.market-volume-header strong{color:var(--ink)}.market-volume-plot>svg{display:block;width:100%;height:62px;border-bottom:1px solid var(--line);background:rgba(220,226,220,.12)}.market-volume-scale{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;min-width:72px;padding:0 0 4px;pointer-events:none}.market-volume-plot rect.market-volume.up{fill:rgba(217,74,58,.48);stroke:rgba(217,74,58,.58)}.market-volume-plot rect.market-volume.down{fill:rgba(31,122,90,.48);stroke:rgba(31,122,90,.58)}.server-k-chart line.up,.server-k-chart rect.up{stroke:var(--red);fill:var(--red)}.server-k-chart line.down,.server-k-chart rect.down{stroke:var(--green);fill:var(--green)}
     .tree,.branch{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:10px;overflow:hidden}.tree summary,.branch summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:13px 14px;font-weight:900}.tree summary small,.branch summary small{color:var(--muted);font-weight:700;text-align:right}.tree-body{padding:10px}.branch{box-shadow:none}.tagline{padding:0 14px 10px}.peer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 10px 10px}.peer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;border:1px solid var(--line);border-radius:6px;padding:10px;text-decoration:none}.peer small{display:block;color:var(--muted);line-height:1.45}.peer b{color:var(--red);text-align:right}.pager{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px 8px 12px}.pager button{border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:#fff;font:inherit;font-weight:900;cursor:pointer;white-space:nowrap}.pager button:disabled{cursor:not-allowed;opacity:.45}.pager span{min-width:0;color:var(--muted);font-size:.82rem;font-weight:900;text-align:center}.theme-industries{display:grid;gap:8px;padding:0 10px 10px}.theme-industry{border:1px solid var(--line);border-radius:6px;background:#fff;overflow:hidden}.theme-industry summary{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;cursor:pointer;list-style:none}.theme-industry summary::-webkit-details-marker{display:none}.theme-industry small{color:var(--muted);text-align:right}
@@ -114,6 +114,7 @@ const HOME_CSS = String.raw`
     .tag{display:inline-flex;margin:2px 4px 2px 0;border-radius:999px;padding:2px 8px;background:var(--red);color:#fff;font-size:.76rem}.code{color:var(--blue)}.manual-update{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;margin:0 0 10px;padding:10px 12px;background:#fff}.manual-update button{border:1px solid var(--green);border-radius:6px;padding:9px 12px;color:#fff;background:var(--green);font:inherit;font-weight:900;cursor:pointer}.manual-update button:disabled{cursor:wait;opacity:.65}.manual-update small{color:var(--muted);font-weight:800}.source-list{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.source-link{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:6px;padding:10px;background:#fff;text-decoration:none;color:inherit}.source-link span{color:var(--green);font-size:.72rem;font-weight:900;text-transform:uppercase}.source-link small{color:var(--muted);line-height:1.45}.drawer-sources{grid-template-columns:1fr;margin-top:10px}.notice-card{display:grid;gap:6px;border:1px solid rgba(217,74,58,.28);border-radius:6px;margin-bottom:8px;padding:10px;background:#fff7f4}.notice-card a{color:var(--red);font-weight:900}
     .news-list{display:grid;gap:8px}.news-item{display:grid;gap:4px;border:1px solid var(--line);border-radius:7px;padding:10px;background:#fff;color:inherit;text-decoration:none}.news-item:hover{border-color:var(--blue);background:rgba(40,109,168,.04)}.news-item strong{line-height:1.45}.news-item small{color:var(--muted);font-size:.76rem}.news-confidence{color:var(--green);font-weight:900}
     .disclaimer-panel{max-width:900px;margin:0 auto}.disclaimer-callout{border:1px solid rgba(168,121,26,.3);border-radius:8px;padding:16px;background:#fffaf0;color:var(--ink);font-size:1.02rem;font-weight:900;line-height:1.75}.disclaimer-list{display:grid;gap:10px;padding-left:22px;color:var(--muted);line-height:1.75}.disclaimer-panel time{color:var(--muted);font-size:.8rem}
+    .guide-page{display:grid;gap:14px}.guide-intro{border:1px solid rgba(31,122,90,.25);border-radius:8px;padding:16px;background:rgba(31,122,90,.06);line-height:1.7}.guide-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.guide-card{border:1px solid var(--line);border-radius:8px;padding:15px;background:#fff}.guide-card h2{font-size:1.08rem}.guide-card ol,.guide-card ul{display:grid;gap:7px;margin:8px 0 0;padding-left:22px;color:var(--muted);line-height:1.55}.guide-schedule{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}.guide-schedule article{border:1px solid var(--line);border-radius:7px;padding:12px;background:#f8faf7}.guide-schedule strong,.guide-schedule small{display:block}.guide-schedule small{margin-top:4px;color:var(--muted);line-height:1.5}
     @media(max-width:1100px){.global-market-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.institution-leader-grid{grid-template-columns:1fr}.institution-leader-lists{grid-template-columns:repeat(2,minmax(0,1fr))}.institution-leader-list{max-height:520px}.screener-form{grid-template-columns:repeat(3,minmax(0,1fr))}.compare-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:900px){.hero,.grid-2,.grid-4,.peer-grid,.flow-grid,.source-list,.market-snapshot{grid-template-columns:1fr}.recommend-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.quality-grid,.screener-results{grid-template-columns:repeat(2,minmax(0,1fr))}.tree summary,.branch summary{display:block}.tree summary small,.branch summary small{display:block;text-align:left;margin-top:4px}}@media(max-width:760px){.flow-row{grid-template-columns:1fr;align-items:start}.flow-row b{text-align:left}.flow-track{width:100%;min-width:0}.snapshot-grid,.institution-leader-lists,.quality-grid,.screener-results,.compare-grid{grid-template-columns:1fr}.institution-leader-list{max-height:420px}.capital-bar-row{grid-template-columns:minmax(0,1fr) auto}.capital-bar-track{grid-column:1/-1;grid-row:2}.capital-bar-value{grid-column:2;grid-row:1}}@media(max-width:600px){.global-market-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.recommend-grid{grid-template-columns:1fr}.screener-form{grid-template-columns:1fr 1fr}.compare-form{grid-template-columns:1fr}.roster-item{grid-template-columns:1fr}.roster-note-editor{grid-template-columns:1fr}.stock-drawer{width:100vw;max-width:100vw;min-width:0;overflow-x:hidden}.drawer-body,.drawer-section,.chart-toolbar,.chart-panel,.k-chart{min-width:0;max-width:100%}.chart-plot{grid-template-columns:minmax(0,1fr) 62px}.chart-price-scale{min-width:62px}.drawer-grid,.revenue-list{grid-template-columns:1fr}.institution-leader-row{grid-template-columns:22px minmax(0,1fr) auto}.institution-leader-row em{text-align:right}}
 
     html{scroll-behavior:smooth}
@@ -156,7 +157,8 @@ const HOME_CSS = String.raw`
     .info-menu button.active{border-color:rgba(31,122,90,.34);background:rgba(31,122,90,.1);box-shadow:inset 4px 0 0 var(--green)}
     .info-content{min-width:0}.info-section{min-width:0}.info-section[hidden]{display:none!important}
     @media(max-width:900px){.ux-guide{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media(max-width:760px){.info-layout,.scenario-map-grid{grid-template-columns:1fr}.info-menu,.scenario-menu{position:relative;top:auto;grid-template-columns:repeat(2,minmax(0,1fr));max-height:none}.info-menu button,.scenario-menu button{min-height:74px}.scenario-summary-title{grid-template-columns:1fr}.scenario-summary-title>small{max-width:none;text-align:left}.capital-bar-row{grid-template-columns:minmax(0,1fr) auto}.capital-bar-track{grid-column:1/-1;grid-row:2;width:100%;min-width:0}.capital-bar-value{grid-column:2;grid-row:1}}
+    @media(max-width:760px){.info-layout,.scenario-map-grid{grid-template-columns:1fr}.info-menu,.scenario-menu{position:relative;top:auto;grid-template-columns:repeat(2,minmax(0,1fr));max-height:none}.info-menu button,.scenario-menu button{min-height:74px}.scenario-summary-title{grid-template-columns:1fr}.scenario-summary-title>small{max-width:none;text-align:left}.capital-bar-row{grid-template-columns:minmax(0,1fr) auto}.capital-bar-track{display:block!important;grid-column:1/-1;grid-row:2;width:100%;min-width:0;height:18px;border:1px solid #d6dfd8;background:#e2e9e4}.capital-bar-track i{display:block!important;min-width:6px;background:linear-gradient(90deg,#087957,#43a57d)}.capital-bar-value{grid-column:2;grid-row:1}}
+    @media(max-width:760px){.guide-grid,.guide-schedule{grid-template-columns:1fr}}
     @media(max-width:560px){.ux-guide{grid-template-columns:1fr}.pager{gap:6px;padding-left:4px;padding-right:4px}.pager button{min-width:48px;padding:7px 6px}.info-menu,.scenario-menu{grid-template-columns:1fr}.scenario-summary-bars{grid-template-columns:1fr}.scenario-list li a{grid-template-columns:24px minmax(0,1fr) minmax(104px,auto);gap:6px 8px}.scenario-list li small{max-width:124px}}
     .chart-plot{position:relative}
     .chart-hit{fill:transparent;stroke:transparent;pointer-events:all;cursor:crosshair}
@@ -170,6 +172,7 @@ const HOME_CSS = String.raw`
       body{font-size:15px}
       main{width:min(100% - 24px,1260px);padding-bottom:calc(72px + env(safe-area-inset-bottom))}
       .nav{position:sticky;top:0;z-index:35;margin-inline:-12px;padding:10px 12px;background:rgba(246,247,242,.96);box-shadow:0 1px 0 var(--line);scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+      .nav-account{margin-left:0;flex:none}
       .nav a,.nav button{min-height:44px;display:inline-flex;align-items:center;scroll-snap-align:start}
       .manual-update{margin-top:8px}
       .hero{gap:12px;padding:18px 0 14px}
@@ -5562,6 +5565,270 @@ async function listGlobalMarkets() {
   return [...indices, night];
 }
 
+function taipeiDateKey(date = new Date()) {
+  return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function syncGlobalMarketSnapshots(db) {
+  const capturedAt = new Date().toISOString();
+  const previousRows = await db.prepare("select symbol, price, captured_at from global_market_snapshots").all();
+  const previousBySymbol = new Map((previousRows.results || []).map((row) => [String(row.symbol), row]));
+  const rows = await listGlobalMarkets();
+  if (rows.length) {
+    await db.batch(rows.map((row) => db.prepare(`
+      insert into global_market_snapshots (
+        symbol, kind, label, country, market, price, change_value, change_percent,
+        currency, market_time, data_date, contract_month, session, volume,
+        source_status, captured_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(symbol) do update set
+        kind = excluded.kind,
+        label = excluded.label,
+        country = excluded.country,
+        market = excluded.market,
+        price = excluded.price,
+        change_value = excluded.change_value,
+        change_percent = excluded.change_percent,
+        currency = excluded.currency,
+        market_time = excluded.market_time,
+        data_date = excluded.data_date,
+        contract_month = excluded.contract_month,
+        session = excluded.session,
+        volume = excluded.volume,
+        source_status = excluded.source_status,
+        captured_at = excluded.captured_at
+    `).bind(
+      row.symbol,
+      row.kind || "index",
+      row.label,
+      row.country,
+      row.market || null,
+      toNumber(row.price),
+      toNumber(row.change),
+      toNumber(row.change_percent),
+      row.currency || null,
+      row.market_time || null,
+      row.data_date || null,
+      row.contract_month || null,
+      row.session || null,
+      toNumber(row.volume),
+      row.status || "unavailable",
+      capturedAt,
+    )));
+  }
+  return {
+    status: rows.some((row) => row.status !== "ok") ? "partial" : "success",
+    captured_at: capturedAt,
+    rows: rows.map((row) => {
+      const previous = previousBySymbol.get(String(row.symbol));
+      const previousPrice = toNumber(previous?.price);
+      const price = toNumber(row.price);
+      return {
+        ...row,
+        previous_sync_price: previousPrice,
+        change_since_previous_sync: price !== null && previousPrice !== null ? price - previousPrice : null,
+        previous_sync_at: previous?.captured_at || null,
+      };
+    }),
+  };
+}
+
+function notificationPreferencePayload(row, user, env) {
+  return {
+    email: user.email,
+    notify_0800: Boolean(row?.notify_0800),
+    notify_1000: Boolean(row?.notify_1000),
+    notify_1800: Boolean(row?.notify_1800),
+    delivery_available: Boolean(env.EMAIL && env.NOTIFICATION_FROM_EMAIL),
+    sender: env.NOTIFICATION_FROM_EMAIL || null,
+  };
+}
+
+async function getNotificationPreferences(db, user, env) {
+  const row = await db.prepare(`
+    select notify_0800, notify_1000, notify_1800, updated_at
+    from watchlist_notification_preferences
+    where user_id = ?
+  `).bind(user.id).first();
+  return { ...notificationPreferencePayload(row, user, env), updated_at: row?.updated_at || null };
+}
+
+async function saveNotificationPreferences(db, user, env, body) {
+  const now = new Date().toISOString();
+  const values = {
+    notify_0800: body.notify_0800 === true || body.notify_0800 === 1,
+    notify_1000: body.notify_1000 === true || body.notify_1000 === 1,
+    notify_1800: body.notify_1800 === true || body.notify_1800 === 1,
+  };
+  await db.prepare(`
+    insert into watchlist_notification_preferences (
+      user_id, notify_0800, notify_1000, notify_1800, updated_at
+    )
+    values (?, ?, ?, ?, ?)
+    on conflict(user_id) do update set
+      notify_0800 = excluded.notify_0800,
+      notify_1000 = excluded.notify_1000,
+      notify_1800 = excluded.notify_1800,
+      updated_at = excluded.updated_at
+  `).bind(
+    user.id,
+    values.notify_0800 ? 1 : 0,
+    values.notify_1000 ? 1 : 0,
+    values.notify_1800 ? 1 : 0,
+    now,
+  ).run();
+  return { ...notificationPreferencePayload(values, user, env), updated_at: now };
+}
+
+function signedNumber(value, digits = 2) {
+  const number = toNumber(value);
+  if (number === null) return "-";
+  return `${number > 0 ? "+" : ""}${number.toLocaleString("zh-TW", { maximumFractionDigits: digits })}`;
+}
+
+function scheduledUpdateDetails(slot, report) {
+  if (slot === "08:00") {
+    const rows = report?.rows || [];
+    const updates = rows.map((row) => `${row.country}｜${row.label}：${signedNumber(row.price)}（${signedNumber(row.change)}／${signedNumber(row.change_percent)}%）`);
+    const changes = rows.map((row) => {
+      const sincePrevious = toNumber(row.change_since_previous_sync);
+      const previousText = sincePrevious === null ? "首次建立快照" : `較上次 08:00 快照 ${signedNumber(sincePrevious)}`;
+      return `${row.country}｜${row.label}：${previousText}；來源狀態 ${row.status === "ok" ? "成功" : "未取得"}`;
+    });
+    return { updates, changes, failures: rows.filter((row) => row.status !== "ok").map((row) => `${row.country}｜${row.label}`) };
+  }
+  const labels = {
+    daily_price: "每日行情",
+    stock_valuation: "本益比與估值",
+    institutional_flow: "三大法人",
+    monthly_revenue: "月營收",
+    market_index: "台灣加權指數",
+    dividend_calendar: "除權息日曆",
+    theme_score: "題材評分",
+    stock_score: "個股評分",
+    stock_basic: "股票名冊",
+  };
+  const updates = [];
+  const changes = [];
+  const visit = (value, path = []) => {
+    if (!value || typeof value !== "object") return;
+    if (value.error) return;
+    const numericKeys = ["received", "inserted", "updated", "skipped"].filter((key) => Number.isFinite(Number(value[key])));
+    if (numericKeys.length) {
+      const key = path[0] || "資料";
+      const name = labels[key] || key;
+      const date = value.latest_data_date || value.data_date || "-";
+      updates.push(`${name}：資料日期 ${date}`);
+      changes.push(`${name}：新增 ${Number(value.inserted || 0).toLocaleString("zh-TW")}、更新 ${Number(value.updated || 0).toLocaleString("zh-TW")}、略過 ${Number(value.skipped || 0).toLocaleString("zh-TW")}`);
+      return;
+    }
+    Object.entries(value).forEach(([key, child]) => visit(child, path.length ? path : [key]));
+  };
+  visit(report?.summary || {});
+  const failures = (report?.source_errors || []).map((item) => `${item.source}：${item.error}`);
+  if (!updates.length) updates.push("本次排程已執行，但來源沒有回傳可入庫資料。");
+  return { updates, changes, failures };
+}
+
+function notificationEmailContent(slot, report, recipientName) {
+  const details = scheduledUpdateDetails(slot, report);
+  const status = report?.status === "success" ? "完成" : "部分完成";
+  const subject = `[台股研究平台] ${slot} 資料更新${status}`;
+  const lines = [
+    `${recipientName || "您好"}，`,
+    "",
+    `${slot} 排程已${status}。`,
+    "",
+    "本次更新內容",
+    ...details.updates.map((line) => `- ${line}`),
+    "",
+    "主要變動",
+    ...(details.changes.length ? details.changes : ["沒有可比較的新增或更新筆數。"]).map((line) => `- ${line}`),
+  ];
+  if (details.failures.length) lines.push("", "失敗／未取得來源", ...details.failures.map((line) => `- ${line}`));
+  lines.push("", "查看交易帳本與調整提醒：https://claw.terry878.org/watchlist", "本郵件是依您在交易帳本勾選的更新時段寄送。");
+  const text = lines.join("\n");
+  const html = `<div style="font-family:system-ui,-apple-system,'Noto Sans TC',sans-serif;line-height:1.65;color:#0d1b2a"><p>${escHtml(recipientName || "您好")}，</p><p><strong>${escHtml(slot)} 排程已${escHtml(status)}。</strong></p><h2 style="font-size:18px">本次更新內容</h2><ul>${details.updates.map((line) => `<li>${escHtml(line)}</li>`).join("")}</ul><h2 style="font-size:18px">主要變動</h2><ul>${(details.changes.length ? details.changes : ["沒有可比較的新增或更新筆數。"]).map((line) => `<li>${escHtml(line)}</li>`).join("")}</ul>${details.failures.length ? `<h2 style="font-size:18px;color:#a33">失敗／未取得來源</h2><ul>${details.failures.map((line) => `<li>${escHtml(line)}</li>`).join("")}</ul>` : ""}<p><a href="https://claw.terry878.org/watchlist">查看交易帳本或調整提醒</a></p><p style="color:#64727a;font-size:13px">本郵件是依您在交易帳本勾選的更新時段寄送。</p></div>`;
+  return { subject, text, html };
+}
+
+async function sendScheduledUpdateNotifications(db, env, slot, report, scheduledAt = new Date()) {
+  const column = { "08:00": "notify_0800", "10:00": "notify_1000", "18:00": "notify_1800" }[slot];
+  if (!column) throw new Error(`Unsupported notification slot: ${slot}`);
+  const notificationDate = taipeiDateKey(scheduledAt);
+  const recipients = await db.prepare(`
+    select u.id, u.email, u.name
+    from watchlist_notification_preferences p
+    join watchlist_users u on u.id = p.user_id
+    where p.${column} = 1
+      and exists (
+        select 1 from watchlist_transactions wt where wt.user_id = u.id
+      )
+    order by u.id
+    limit 500
+  `).all();
+  const summary = { selected: recipients.results?.length || 0, sent: 0, failed: 0, skipped: 0 };
+  for (const recipient of recipients.results || []) {
+    const existing = await db.prepare(`
+      select status from notification_delivery_logs
+      where user_id = ? and notification_date = ? and notification_slot = ?
+    `).bind(recipient.id, notificationDate, slot).first();
+    if (existing?.status === "sent") {
+      summary.skipped++;
+      continue;
+    }
+    const content = notificationEmailContent(slot, report, recipient.name);
+    let status = "skipped";
+    let messageId = null;
+    let errorMessage = null;
+    if (!env.EMAIL || !env.NOTIFICATION_FROM_EMAIL) {
+      errorMessage = "Cloudflare Email binding or sender address is not configured.";
+    } else {
+      try {
+        const result = await env.EMAIL.send({
+          to: recipient.email,
+          from: { email: env.NOTIFICATION_FROM_EMAIL, name: "台股研究平台" },
+          subject: content.subject,
+          text: content.text,
+          html: content.html,
+        });
+        status = "sent";
+        messageId = result?.messageId || null;
+      } catch (error) {
+        status = "failed";
+        errorMessage = `${error?.code ? `${error.code}: ` : ""}${error?.message || error}`.slice(0, 500);
+      }
+    }
+    await db.prepare(`
+      insert into notification_delivery_logs (
+        user_id, notification_date, notification_slot, recipient_email,
+        status, subject, message_id, error_message, created_at
+      )
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(user_id, notification_date, notification_slot) do update set
+        recipient_email = excluded.recipient_email,
+        status = excluded.status,
+        subject = excluded.subject,
+        message_id = excluded.message_id,
+        error_message = excluded.error_message,
+        created_at = excluded.created_at
+    `).bind(
+      recipient.id,
+      notificationDate,
+      slot,
+      recipient.email,
+      status,
+      content.subject,
+      messageId,
+      errorMessage,
+      new Date().toISOString(),
+    ).run();
+    summary[status]++;
+  }
+  return summary;
+}
+
 function stockNewsAliases(stock) {
   const name = String(stock?.stock_name || "").trim();
   const baseName = name
@@ -6950,6 +7217,48 @@ async function syncOfficialMarketData(db, payload = {}) {
   }
 }
 
+async function runScheduledUpdate(env, event, job) {
+  const scheduledAt = new Date(event.scheduledTime || Date.now());
+  let report;
+  if (job.slot === "08:00") {
+    report = await syncGlobalMarketSnapshots(env.DB);
+    const available = report.rows.filter((row) => row.status === "ok").length;
+    await updateQualityStatus(env.DB, {
+      dataType: "global_market",
+      marketScope: "global",
+      source: "Yahoo Finance + TAIFEX OpenAPI",
+      latestDataDate: taipeiDateKey(scheduledAt),
+      status: report.status,
+      recordCount: report.rows.length,
+      coveredStocks: available,
+      expectedStocks: GLOBAL_INDEX_DEFINITIONS.length + 1,
+      note: `${available}/${GLOBAL_INDEX_DEFINITIONS.length + 1} global and night-session instruments available.`,
+    });
+    await writeCrawlerLog(
+      env.DB,
+      job.name,
+      "Yahoo Finance + TAIFEX OpenAPI",
+      "global-market,night-session",
+      report.captured_at,
+      report.status,
+      available,
+      report.rows.length,
+      report.rows.filter((row) => row.status !== "ok").map((row) => row.symbol).join(",") || null,
+    );
+  } else {
+    report = await syncOfficialMarketData(env.DB, {
+      crawler_name: job.name,
+      tasks: job.tasks,
+      recompute_scores: job.recompute_scores === true,
+      skip_tpex: true,
+      trigger: "cloudflare-cron",
+      cron: event.cron,
+    });
+  }
+  const notifications = await sendScheduledUpdateNotifications(env.DB, env, job.slot, report, scheduledAt);
+  return { job: job.name, slot: job.slot, report, notifications };
+}
+
 async function logCrawlerRun(db, payload) {
   const now = new Date().toISOString();
   const crawlerName = payload.crawler_name || "unknown";
@@ -7048,6 +7357,7 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
     research: ["選股研究", "使用選股器建立條件，再比較 2–4 檔股票。"],
     taxonomy: ["分類探索", "官方產業、已驗證題材與龍頭供應鏈名冊。"],
     data: ["資料中心", "資料覆蓋率、來源狀態與官方參考連結。"],
+    guide: ["使用教學", "快速了解平台特色、資料更新時間與各項功能的操作方式。"],
     disclaimer: ["投資風險聲明", "使用本研究平台前，請先閱讀資料使用與投資風險說明。"],
   }[page] || ["台股全市場研究平台", "盤後台股研究工具。"];
   const topRevenue = [...stocksData].sort((a, b) => Number(b.yoy_growth_percent || 0) - Number(a.yoy_growth_percent || 0))[0] || {};
@@ -7924,7 +8234,7 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
 <body>
 <main>
   <section class="manual-update"><small data-update-status>官方資料由受保護排程更新；公開頁面只讀取已驗證的 TWSE / TPEx / MOPS 資料。</small></section>
-  <nav class="nav"><a href="/">首頁</a><a href="/market">市場研究</a><a href="/research">選股研究</a><a href="/taxonomy">分類探索</a><a href="/data">資料中心</a><a href="/watchlist">Google登入 / 自選股</a><a href="/disclaimer">投資風險聲明</a><button class="install-app" type="button" data-install-app hidden>下載 APP</button></nav>
+  <nav class="nav"><a href="/">首頁</a><a href="/market">市場研究</a><a href="/research">選股研究</a><a href="/taxonomy">分類探索</a><a href="/data">資料中心</a><a href="/guide">使用教學</a><a href="/disclaimer">投資風險聲明</a><button class="install-app" type="button" data-install-app hidden>下載 APP</button><span class="nav-account"><a href="/watchlist#login">Google 登入</a><a href="/watchlist">自選股／交易帳本</a></span></nav>
   ${show("home") ? `<section class="hero">
     <div><p class="eyebrow">Cloudflare + D1 MVP</p><h1>台股全市場研究平台</h1><p>以「應用方向 > 產業 > 同業」整理所有台股資訊；公司業務可同時出現在多個應用抽屜，產業節點會帶出題材與角色標籤。</p></div>
     <aside class="update"><span>最後同步時間</span><strong data-latest-sync-time>${updated}</strong><small>收盤行情：<b data-latest-price-date>${latestDataDate("daily_price")}</b></small><small>三大法人：<b data-latest-institutional-date>${latestDataDate("institutional_flow")}</b>／加權指數：<b data-latest-index-date>${latestDataDate("market_index")}</b></small><small>月營收：<b data-latest-revenue-date>${String(latestDataDate("monthly_revenue")).slice(0, 7)}</b></small><small>本網站僅供研究觀察，不構成投資建議。</small></aside>
@@ -7942,6 +8252,20 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
     </ul>
     <p>繼續使用本平台，即表示您已閱讀並理解上述風險。若無法接受，請停止使用本平台提供的研究內容。</p>
     <time datetime="2026-07-02">最後更新：2026-07-02</time>
+  </section>` : ""}
+  ${show("guide") ? `<section class="guide-page">
+    <article class="guide-intro"><strong>平台特色</strong><p>把官方產業、已驗證題材、法人、營收、估值、全球市場與個人交易帳本放在同一套研究流程。資料不足時會明確標示，不把示範資料包裝成正式推薦。</p></article>
+    <article class="panel"><p class="eyebrow">Update Schedule</p><h2>每天什麼時候更新？</h2><div class="guide-schedule"><article><strong>08:00</strong><small>美國、日本、韓國主要指數與台指期夜盤；可寄送漲跌與快照變動。</small></article><article><strong>10:00</strong><small>月營收、台灣加權指數、除權息；週日另同步完整股票名冊。</small></article><article><strong>18:00</strong><small>收盤行情、本益比、三大法人與可用資料評分。</small></article></div></article>
+    <div class="guide-grid">
+      <article class="guide-card"><h2>1. 搜尋股票</h2><ol><li>前往「選股研究」。</li><li>輸入代號或名稱片段，例如 2330、台積。</li><li>從預選清單點選股票，右側會開啟 K 線、本益比、法人、營收、日期與新聞。</li></ol></article>
+      <article class="guide-card"><h2>2. 進階條件選股</h2><ol><li>展開「進階條件選股」。</li><li>設定市場、官方產業、已驗證題材、價格、成交額、營收或法人條件。</li><li>按「開始篩選」；這些條件不會影響上方一般股票搜尋。</li></ol></article>
+      <article class="guide-card"><h2>3. 市場與資金</h2><ul><li>市場資金集中量圖可點產業後繼續查看細分同業。</li><li>法人區分外資、投信、自營商，可看買賣超與期間累積。</li><li>全球市場區顯示國家、指數名稱與夜盤資訊。</li></ul></article>
+      <article class="guide-card"><h2>4. 個股圖表</h2><ul><li>日線、月線、年線可切換。</li><li>移動平均線 MA 與布林通道 BOLL 可個別勾選。</li><li>新聞只保留與股票代號、公司名稱或 ticker 相符的高可信來源。</li></ul></article>
+      <article class="guide-card"><h2>5. 個股比較</h2><ol><li>逐一輸入股票代號或名稱。</li><li>點選預選項目加入比較框。</li><li>加入 2–4 檔後，比較價格、估值、營收、法人、題材與評分。</li></ol></article>
+      <article class="guide-card"><h2>6. 交易帳本</h2><ol><li>使用 Google 帳號登入。</li><li>選擇買入／賣出、交易模式、股或張、價格與費率。</li><li>系統依加權平均成本計算庫存、已實現與未實現損益；每筆歷史可個別刪除。</li></ol></article>
+      <article class="guide-card"><h2>7. Email 更新提醒</h2><ol><li>在交易帳本勾選 08:00、10:00、18:00，可複選。</li><li>按「儲存提醒設定」。</li><li>郵件會列出本次更新內容、主要變動與失敗來源，寄到 Google 登入信箱。</li></ol></article>
+      <article class="guide-card"><h2>8. 資料限制</h2><ul><li>本站是盤後研究工具，不是即時下單系統。</li><li>官方來源尚未公告、同步失敗或涵蓋不足時會顯示資料不足。</li><li>評分與題材僅供研究，不構成投資建議；投資盈虧由使用者自行承擔。</li></ul></article>
+    </div>
   </section>` : ""}
   ${show("market") ? `<section class="market-snapshot" id="market-dashboard">
     <article class="panel"><p class="eyebrow">Market Dashboard</p><div class="panel-head"><h2>目前市場焦點</h2><span class="info-dot" tabindex="0" data-tip="熱門股票依成交值、題材分數與法人資料排序；外資/投信買賣超來自 TWSE T86，金額與張數僅作研究觀察。">!</span></div><div class="snapshot-grid">${marketSnapshotRows}</div></article>
@@ -8062,7 +8386,7 @@ function watchlistHtml(env) {
       <h1>自選股</h1>
       <p class="muted">任何 Google 帳號都可登入並建立自己的台股清單；每位使用者的資料分開保存，只能查看自己的清單。</p>
     </article>
-    <aside class="panel login-box" data-auth></aside>
+    <aside class="panel login-box" id="login" data-auth></aside>
   </section>
   <section class="panel" style="margin-top:16px" data-app hidden>
     <h2>我的清單</h2>
@@ -8334,18 +8658,28 @@ function watchlistLedgerHtml(env) {
     form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}label{display:grid;gap:5px;min-width:0;color:var(--muted);font-size:.78rem;font-weight:900}.wide{grid-column:span 2}input,select{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit;background:#fff}button{border:0;border-radius:8px;background:var(--green);color:#fff;font-weight:800;padding:10px 14px;cursor:pointer}button.secondary{background:#eef3ef;color:var(--ink)}button.danger{background:#f7e7e4;color:#9d2f26}button:disabled{cursor:not-allowed;opacity:.55}.form-status{grid-column:1/-1;min-height:20px;color:var(--muted)}form>[type="submit"]{grid-column:1/-1;justify-self:start;min-width:150px}.cost-preview{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:10px;background:#fbfcf8}.cost-preview b{border-radius:999px;padding:4px 8px;background:#eef3ef;font-size:.78rem}.fee-help{margin:8px 0 18px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfcf8}.fee-help summary{cursor:pointer;color:var(--green);font-weight:900}.fee-help p{margin-top:8px;color:var(--muted);line-height:1.65}.fee-help a{color:var(--blue)}
     .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.summary-card{border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.summary-card span,.summary-card small{display:block;color:var(--muted);font-size:.76rem}.summary-card strong{display:block;margin:5px 0;font-size:1.1rem}.up{color:var(--red)!important}.down{color:var(--green)!important}
     .position-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.position{display:block;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff}.position a{display:block;color:inherit;text-decoration:none}.position small{display:block;color:var(--muted);line-height:1.55}.profit-box{display:grid;gap:4px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}.alert-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.alert-list b{border:1px solid rgba(11,127,95,.24);border-radius:999px;padding:3px 7px;background:rgba(11,127,95,.08);color:var(--green);font-size:.74rem}.empty{border:1px dashed var(--line);border-radius:8px;padding:24px;text-align:center;color:var(--muted)}
-    .history{display:grid;gap:10px;margin-top:10px}.stock-ledger{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}.stock-ledger>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;list-style:none}.stock-ledger>summary::-webkit-details-marker{display:none}.stock-ledger>summary::after{content:"展開";flex:none;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--green);font-size:.72rem;font-weight:900}.stock-ledger[open]>summary::after{content:"收合"}.ledger-title{display:grid;gap:3px;min-width:0}.ledger-title strong{font-size:1rem}.ledger-title small,.ledger-meta{color:var(--muted);font-size:.76rem}.ledger-meta{text-align:right;line-height:1.5}.ledger-transactions{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid var(--line)}.transaction{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.ledger-transactions .transaction:first-child{margin-top:12px}.side-chip{display:inline-flex;border-radius:999px;padding:4px 8px;color:#fff;font-size:.76rem;font-weight:900}.side-buy{background:var(--red)}.side-sell{background:var(--green)}.transaction strong,.transaction small{display:block}.transaction small{margin-top:3px;color:var(--muted);line-height:1.5}.auto-refresh-note{display:block;margin:8px 0 14px;color:var(--muted);font-size:.78rem}.config-hint{border:1px dashed var(--line);border-radius:8px;padding:12px;background:#fbfcf8}.config-hint code{display:block;margin-top:8px;padding:8px;border-radius:6px;background:#eef3ef}.google-disabled{width:100%;background:#eef3ef;color:var(--muted);cursor:not-allowed}
+    .history{display:grid;gap:10px;margin-top:10px}.stock-ledger{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}.stock-ledger>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;list-style:none}.stock-ledger>summary::-webkit-details-marker{display:none}.stock-ledger>summary::after{content:"展開";flex:none;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--green);font-size:.72rem;font-weight:900}.stock-ledger[open]>summary::after{content:"收合"}.ledger-title{display:grid;gap:3px;min-width:0}.ledger-title strong{font-size:1rem}.ledger-title small,.ledger-meta{color:var(--muted);font-size:.76rem}.ledger-meta{text-align:right;line-height:1.5}.ledger-transactions{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid var(--line)}.transaction{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.ledger-transactions .transaction:first-child{margin-top:12px}.side-chip{display:inline-flex;border-radius:999px;padding:4px 8px;color:#fff;font-size:.76rem;font-weight:900}.side-buy{background:var(--red)}.side-sell{background:var(--green)}.transaction strong,.transaction small{display:block}.transaction small{margin-top:3px;color:var(--muted);line-height:1.5}.auto-refresh-note{display:block;margin:8px 0 14px;color:var(--muted);font-size:.78rem}.config-hint{border:1px dashed var(--line);border-radius:8px;padding:12px;background:#fbfcf8}.config-hint code{display:block;margin-top:8px;padding:8px;border-radius:6px;background:#eef3ef}.google-disabled{width:100%;background:#eef3ef;color:var(--muted);cursor:not-allowed}.notification-settings{margin-bottom:18px;border:1px solid rgba(40,109,168,.22);border-radius:8px;padding:14px;background:rgba(40,109,168,.05)}.notification-settings h2{margin-bottom:5px}.notification-options{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.notification-option{display:flex;grid-template-columns:none;align-items:flex-start;gap:8px;min-width:190px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff;color:var(--ink);cursor:pointer}.notification-option input{width:18px;height:18px;margin:1px 0 0;accent-color:var(--green)}.notification-option span{display:grid;gap:2px}.notification-option small{color:var(--muted);font-weight:700;line-height:1.4}.notification-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.notification-status{color:var(--muted);font-size:.8rem;font-weight:800}
     @media(max-width:900px){form{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:1/-1}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.hero,.position-grid,form{grid-template-columns:1fr}.wide{grid-column:auto}.nav{align-items:flex-start;flex-direction:column}.summary-grid{grid-template-columns:1fr 1fr}.transaction{grid-template-columns:auto minmax(0,1fr)}.transaction .danger{grid-column:1/-1}.trade-tabs button{flex:1;min-width:0}.stock-ledger>summary{align-items:flex-start}.ledger-meta{text-align:left}.stock-ledger>summary::after{margin-left:auto}}@media(max-width:430px){.summary-grid{grid-template-columns:1fr}.stock-ledger>summary{display:grid;grid-template-columns:minmax(0,1fr) auto}.ledger-meta{grid-column:1/-1}}
   </style>
   ${clientId ? '<script src="https://accounts.google.com/gsi/client" async defer></script>' : ''}
 </head>
 <body class="watchlist-ledger"><main>
-  <nav class="nav"><a href="/">返回首頁</a><a href="/disclaimer">投資風險聲明</a><button class="install-app" type="button" data-install-app hidden>下載 APP</button><span>Google 帳號個人交易帳本</span></nav>
+  <nav class="nav"><a href="/">返回首頁</a><a href="/guide">使用教學</a><a href="/disclaimer">投資風險聲明</a><button class="install-app" type="button" data-install-app hidden>下載 APP</button><span>Google 帳號個人交易帳本</span></nav>
   <section class="hero">
     <article class="panel"><h1>自選股與交易帳本</h1><p class="muted">買入、賣出分筆保存；依加權平均成本自動計算庫存、已實現與未實現損益。</p></article>
     <aside class="panel login-box" data-auth></aside>
   </section>
   <section class="panel" style="margin-top:16px" data-app hidden>
+    <div class="notification-settings">
+      <h2>更新 Email 提醒</h2>
+      <p class="muted">寄送到 Google 登入信箱；可複選時段。郵件會列出本次更新內容、主要變動及失敗來源。</p>
+      <div class="notification-options">
+        <label class="notification-option"><input type="checkbox" data-notify-slot="notify_0800"><span><strong>08:00</strong><small>各國股市、台指夜盤</small></span></label>
+        <label class="notification-option"><input type="checkbox" data-notify-slot="notify_1000"><span><strong>10:00</strong><small>營收、指數、除權息</small></span></label>
+        <label class="notification-option"><input type="checkbox" data-notify-slot="notify_1800"><span><strong>18:00</strong><small>行情、估值、法人與評分</small></span></label>
+      </div>
+      <div class="notification-actions"><button type="button" data-save-notifications>儲存提醒設定</button><span class="notification-status" data-notification-status role="status" aria-live="polite"></span></div>
+    </div>
     <h2>新增交易</h2>
     <div class="trade-tabs" role="tablist" aria-label="交易方向"><button type="button" class="active" data-side="buy">買入</button><button type="button" data-side="sell">賣出</button></div>
     <form data-trade-form>
@@ -8395,6 +8729,9 @@ function watchlistLedgerHtml(env) {
   const optionsRoot = document.querySelector("[data-stock-options]");
   const status = document.querySelector("[data-form-status]");
   const refreshStatus = document.querySelector("[data-refresh-status]");
+  const notificationStatus = document.querySelector("[data-notification-status]");
+  const notificationSave = document.querySelector("[data-save-notifications]");
+  const notificationSlots = Array.from(document.querySelectorAll("[data-notify-slot]"));
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
   const number = (value, digits = 2) => value === null || value === undefined || value === "" ? "-" : Number(value).toLocaleString("zh-TW", { maximumFractionDigits: digits });
   const twd = (value) => value === null || value === undefined ? "-" : (Number(value) > 0 ? "+" : Number(value) < 0 ? "-" : "") + Math.abs(Math.round(Number(value))).toLocaleString("zh-TW") + " 元";
@@ -8583,8 +8920,28 @@ function watchlistLedgerHtml(env) {
     renderPortfolio(data);
     refreshStatus.textContent = "損益依最新收盤價估算；最近更新：" + new Date().toLocaleTimeString("zh-TW",{hour12:false});
   }
+  async function loadNotificationPreferences() {
+    const data = await api("/api/watchlist/notifications");
+    notificationSlots.forEach((input) => { input.checked = Boolean(data[input.dataset.notifySlot]); });
+    notificationStatus.textContent = data.delivery_available
+      ? "寄送信箱：" + data.email
+      : "設定可先保存；Cloudflare Email Service 尚未完成寄件網域啟用。";
+  }
+  async function saveNotificationPreferencesUI() {
+    notificationSave.disabled = true;
+    notificationStatus.textContent = "正在儲存...";
+    const payload = Object.fromEntries(notificationSlots.map((input) => [input.dataset.notifySlot, input.checked]));
+    try {
+      const data = await api("/api/watchlist/notifications", { method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
+      notificationStatus.textContent = "已儲存；將寄到 " + data.email + (data.delivery_available ? "。" : "。寄信服務啟用後開始寄送。");
+    } catch (error) {
+      notificationStatus.textContent = error.message;
+    } finally {
+      notificationSave.disabled = false;
+    }
+  }
   async function boot() {
-    try { const user = await api("/api/auth/me"); renderUser(user); app.hidden = false; await loadPortfolio(); }
+    try { const user = await api("/api/auth/me"); renderUser(user); app.hidden = false; await Promise.all([loadPortfolio(), loadNotificationPreferences()]); }
     catch (_) { renderLogin(); }
   }
   document.querySelectorAll("[data-side]").forEach((button) => button.addEventListener("click", () => setSide(button.dataset.side)));
@@ -8641,6 +8998,7 @@ function watchlistLedgerHtml(env) {
     const data = await api("/api/watchlist/transactions/" + encodeURIComponent(button.dataset.deleteTransaction),{method:"DELETE"});
     renderPortfolio(data);
   });
+  notificationSave.addEventListener("click", saveNotificationPreferencesUI);
   stockInput.addEventListener("input",() => { clearTimeout(timer); timer = setTimeout(() => searchStocks(stockInput.value).catch(() => null),180); });
   form.elements.trade_date.value = new Date().toISOString().slice(0,10);
   setSide("buy");
@@ -8810,6 +9168,21 @@ export default {
         if (!user) return json({ error: "unauthorized" }, 401);
         const data = await listWatchlistPortfolio(db, user.id);
         return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
+      }
+
+      if (url.pathname === "/api/watchlist/notifications" && request.method === "GET") {
+        const user = await currentWatchlistUser(db, request);
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const data = await getNotificationPreferences(db, user, env);
+        return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
+      }
+
+      if (url.pathname === "/api/watchlist/notifications" && ["PUT", "POST"].includes(request.method)) {
+        const user = await currentWatchlistUser(db, request);
+        if (!user) return json({ error: "unauthorized" }, 401);
+        const body = await request.json().catch(() => ({}));
+        const data = await saveNotificationPreferences(db, user, env, body);
+        return json({ data, meta: { updated_at: data.updated_at, source: "cloudflare-d1", is_realtime: false } });
       }
 
       if (url.pathname === "/api/watchlist/transactions" && request.method === "POST") {
@@ -9410,6 +9783,7 @@ export default {
         ["/research", "research"],
         ["/taxonomy", "taxonomy"],
         ["/data", "data"],
+        ["/guide", "guide"],
         ["/disclaimer", "disclaimer"],
       ]);
       const legacyPageRedirects = new Map([
@@ -9483,19 +9857,14 @@ export default {
     const scheduledAt = new Date(event.scheduledTime || Date.now());
     const utcHour = scheduledAt.getUTCHours();
     const utcDay = scheduledAt.getUTCDay();
-    const job = utcHour === 10
-      ? { name: "daily-price-valuation-institutional-sync", tasks: ["daily-price", "stock-valuation", "institutional-flow"], recompute_scores: true }
-      : utcDay === 0
-        ? { name: "weekly-official-stock-basic-sync", tasks: ["stock-basic"] }
-        : { name: "daily-fundamental-calendar-sync", tasks: ["monthly-revenue", "market-index", "dividend"], recompute_scores: true };
-    ctx.waitUntil(syncOfficialMarketData(env.DB, {
-      crawler_name: job.name,
-      tasks: job.tasks,
-      recompute_scores: job.recompute_scores === true,
-      skip_tpex: true,
-      trigger: "cloudflare-cron",
-      cron: event.cron,
-    }));
+    const job = utcHour === 0
+      ? { slot: "08:00", name: "daily-global-market-sync", tasks: [] }
+      : utcHour === 10
+        ? { slot: "18:00", name: "daily-price-valuation-institutional-sync", tasks: ["daily-price", "stock-valuation", "institutional-flow"], recompute_scores: true }
+        : utcDay === 0
+          ? { slot: "10:00", name: "weekly-official-stock-basic-sync", tasks: ["stock-basic"] }
+          : { slot: "10:00", name: "daily-fundamental-calendar-sync", tasks: ["monthly-revenue", "market-index", "dividend"], recompute_scores: true };
+    ctx.waitUntil(runScheduledUpdate(env, event, job));
   },
 };
 
@@ -9504,4 +9873,5 @@ export {
   normalizeTwseMiIndexDailyRow,
   normalizeTpexStockBasic,
   normalizeTwseStockBasic,
+  notificationEmailContent,
 };

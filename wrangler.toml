@@ -10,7 +10,13 @@ routes = [
 directory = "./public"
 
 [triggers]
-crons = ["0 2,10 * * *"]
+crons = ["0 0,2,10 * * *"]
+
+[vars]
+NOTIFICATION_FROM_EMAIL = "updates@terry878.org"
+
+[[send_email]]
+name = "EMAIL"
 
 [[ratelimits]]
 name = "PUBLIC_API_RATE_LIMITER"

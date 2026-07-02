@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import worker, { normalizeTwseMiIndexDailyRow } from "../src/index.js";
+import worker, { normalizeTwseMiIndexDailyRow, notificationEmailContent } from "../src/index.js";
 
 class D1Statement {
   constructor(database, sql, values = []) {
@@ -367,6 +367,9 @@ test("homepage renders from the migrated schema within the initial HTML budget",
   assert.match(html, /href="\/research"/);
   assert.match(html, /href="\/taxonomy"/);
   assert.match(html, /href="\/data"/);
+  assert.match(html, /href="\/guide"/);
+  assert.match(html, /href="\/watchlist#login">Google 登入/);
+  assert.match(html, /href="\/watchlist">自選股／交易帳本/);
   assert.match(html, /href="\/disclaimer"/);
   assert.match(html, /rel="manifest" href="\/manifest\.webmanifest"/);
   assert.match(html, /data-install-app/);
@@ -411,6 +414,14 @@ test("homepage renders from the migrated schema within the initial HTML budget",
   assert.match(disclaimerHtml, /投資決策與盈虧由使用者自行承擔/);
   assert.match(disclaimerHtml, /不構成任何買進、賣出、持有或其他投資建議/);
   assert.match(disclaimerHtml, /依法不得排除或限制的責任/);
+
+  const guidePage = await worker.fetch(request("/guide"), { DB }, {});
+  const guideHtml = await guidePage.text();
+  assert.equal(guidePage.status, 200);
+  assert.match(guideHtml, /平台特色/);
+  assert.match(guideHtml, /08:00/);
+  assert.match(guideHtml, /Email 更新提醒/);
+  assert.match(guideHtml, /交易帳本/);
 
   const industryPage = await worker.fetch(request("/taxonomy"), { DB }, {});
   const industryHtml = await industryPage.text();
@@ -617,6 +628,50 @@ test("global market endpoint combines five indices with the nearest TAIFEX night
     assert.equal(payload.data[5].country, "台灣");
     assert.equal(payload.data[5].contract_month, "202607");
     assert.equal(payload.data[5].price, 47428);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("08:00 scheduler stores global market snapshots without blocking on email", async () => {
+  const DB = new D1TestDatabase();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("query1.finance.yahoo.com/v8/finance/chart")) {
+      return new Response(JSON.stringify({
+        chart: {
+          result: [{
+            meta: { regularMarketPrice: 21000, chartPreviousClose: 20800, regularMarketTime: 1782921600, currency: "USD" },
+            indicators: { quote: [{ close: [20800, 21000] }] },
+          }],
+          error: null,
+        },
+      }), { headers: { "content-type": "application/json" } });
+    }
+    if (url.includes("openapi.taifex.com.tw/v1/DailyMarketReportFut")) {
+      return new Response(JSON.stringify([
+        { Date: "20260703", Contract: "TX", "ContractMonth(Week)": "202607", Last: "48000", Change: "120", "%": "0.25%", Volume: "12000", TradingSession: "盤後" },
+      ]), { headers: { "content-type": "application/json" } });
+    }
+    throw new Error(`unexpected external URL: ${url}`);
+  };
+  try {
+    let scheduledPromise;
+    await worker.scheduled({
+      scheduledTime: Date.parse("2026-07-03T00:00:00Z"),
+      cron: "0 0,2,10 * * *",
+    }, { DB }, {
+      waitUntil(promise) { scheduledPromise = promise; },
+    });
+    const result = await scheduledPromise;
+    assert.equal(result.slot, "08:00");
+    assert.equal(result.report.rows.length, 6);
+    const snapshotCount = await DB.prepare("select count(*) as count from global_market_snapshots").first();
+    assert.equal(snapshotCount.count, 6);
+    const quality = await DB.prepare("select * from data_quality_status where data_type = 'global_market'").first();
+    assert.equal(quality.status, "success");
+    assert.equal(result.notifications.selected, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -845,6 +900,83 @@ test("watchlist transaction ledger calculates fees, sell tax, inventory, and rea
   assert.equal(orphanedItem.count, 0);
 });
 
+test("watchlist update email preferences support multiple selected times", async () => {
+  const DB = new D1TestDatabase();
+  DB.exec(`
+    insert into watchlist_users (google_sub, email, name, picture, created_at, last_login_at)
+    values ('notify-user', 'notify@example.test', 'Notify User', '', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+    insert into watchlist_sessions (user_id, token, created_at, expires_at, user_agent)
+    select id, 'notify-token', '2026-01-01T00:00:00Z', '2099-01-01T00:00:00Z', 'test'
+    from watchlist_users where google_sub = 'notify-user';
+  `);
+  const env = {
+    DB,
+    EMAIL: { send: async () => ({ messageId: "test-message" }) },
+    NOTIFICATION_FROM_EMAIL: "updates@example.test",
+  };
+  const headers = { cookie: "twstock_watchlist=notify-token", "content-type": "application/json" };
+  const saveResponse = await worker.fetch(request("/api/watchlist/notifications", {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ notify_0800: true, notify_1000: false, notify_1800: true }),
+  }), env, {});
+  assert.equal(saveResponse.status, 200);
+  const saved = await saveResponse.json();
+  assert.equal(saved.data.notify_0800, true);
+  assert.equal(saved.data.notify_1000, false);
+  assert.equal(saved.data.notify_1800, true);
+  assert.equal(saved.data.delivery_available, true);
+  assert.equal(saved.data.email, "notify@example.test");
+
+  const readResponse = await worker.fetch(request("/api/watchlist/notifications", {
+    headers: { cookie: "twstock_watchlist=notify-token" },
+  }), env, {});
+  assert.equal(readResponse.status, 200);
+  const read = await readResponse.json();
+  assert.deepEqual(
+    [read.data.notify_0800, read.data.notify_1000, read.data.notify_1800],
+    [true, false, true],
+  );
+
+  const unauthorized = await worker.fetch(request("/api/watchlist/notifications"), env, {});
+  assert.equal(unauthorized.status, 401);
+});
+
+test("scheduled update email describes updated content, changes, and failures", () => {
+  const email = notificationEmailContent("08:00", {
+    status: "partial",
+    rows: [
+      {
+        country: "美國",
+        label: "S&P 500",
+        price: 6200,
+        change: 25,
+        change_percent: 0.4,
+        change_since_previous_sync: 18,
+        status: "ok",
+      },
+      {
+        country: "台灣",
+        label: "台指期夜盤",
+        price: null,
+        change: null,
+        change_percent: null,
+        change_since_previous_sync: null,
+        status: "unavailable",
+      },
+    ],
+  }, "測試使用者");
+  assert.match(email.subject, /08:00/);
+  assert.match(email.text, /本次更新內容/);
+  assert.match(email.text, /主要變動/);
+  assert.match(email.text, /失敗／未取得來源/);
+  assert.match(email.text, /S&P 500/);
+  assert.match(email.html, /查看交易帳本或調整提醒/);
+  const wrangler = readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
+  assert.match(wrangler, /crons = \["0 0,2,10 \* \* \*"\]/);
+  assert.match(wrangler, /\[\[send_email\]\]\s+name = "EMAIL"/);
+});
+
 test("watchlist page exposes buy sell tabs and valid ledger JavaScript", async () => {
   const DB = new D1TestDatabase();
   const response = await worker.fetch(request("/watchlist"), { DB }, {});
@@ -876,6 +1008,11 @@ test("watchlist page exposes buy sell tabs and valid ledger JavaScript", async (
   assert.doesNotMatch(html, /data-delete-stock/);
   assert.match(html, /data-delete-transaction/);
   assert.match(html, /買賣歷史/);
+  assert.match(html, /更新 Email 提醒/);
+  assert.match(html, /data-notify-slot="notify_0800"/);
+  assert.match(html, /data-notify-slot="notify_1000"/);
+  assert.match(html, /data-notify-slot="notify_1800"/);
+  assert.match(html, /\/api\/watchlist\/notifications/);
   assert.match(html, /手動輸入手續費/);
   assert.match(html, /合格現股當沖 0\.15%/);
   const inlineScript = html.match(/<script>\s*([\s\S]*?)<\/script>/)?.[1] || "";

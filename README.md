@@ -19,6 +19,15 @@
 - 一般寫入請求上限 64 KiB，管理匯入上限 6 MB。
 - 熱門唯讀 API 使用 Cloudflare 邊緣快取，降低 D1 與 Worker CPU 負擔。
 
+## 更新排程與 Email
+
+- 台灣時間 08:00：全球主要指數與台指期夜盤。
+- 台灣時間 10:00：月營收、加權指數、除權息；週日同步股票名冊。
+- 台灣時間 18:00：收盤行情、估值、三大法人與評分。
+- 交易帳本使用者可複選三個時段，通知寄到 Google 登入信箱。
+- 寄信使用 Cloudflare `send_email` binding，不在程式碼或 GitHub 保存 API 金鑰。
+- 正式寄信前須在 Cloudflare Email Service 啟用 `terry878.org` 寄件網域；任意收件人寄送需要符合 Cloudflare 方案與額度。
+
 ## 驗證
 
 ```powershell
