@@ -972,7 +972,7 @@ test("watchlist update email preferences support multiple selected times", async
   const DB = new D1TestDatabase();
   DB.exec(`
     insert into watchlist_users (google_sub, email, name, picture, created_at, last_login_at)
-    values ('notify-user', 'admin@example.invalid', 'Notify Admin', '', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+    values ('notify-user', 'admin@example.test', 'Notify Admin', '', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
     insert into watchlist_sessions (user_id, token, created_at, expires_at, user_agent)
     select id, 'notify-token', '2026-01-01T00:00:00Z', '2099-01-01T00:00:00Z', 'test'
     from watchlist_users where google_sub = 'notify-user';
@@ -981,17 +981,24 @@ test("watchlist update email preferences support multiple selected times", async
     insert into watchlist_sessions (user_id, token, created_at, expires_at, user_agent)
     select id, 'outsider-token', '2026-01-01T00:00:00Z', '2099-01-01T00:00:00Z', 'test'
     from watchlist_users where google_sub = 'outsider-user';
+    insert into notification_email_allowlist (
+      email, enabled, added_by, created_at, updated_at, verification_status,
+      activation_requested, provider_address_id, verification_requested_at, verified_at
+    ) values
+      ('admin@example.test', 1, 'test-seed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'verified', 1, 'address-admin', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'),
+      ('member@example.test', 1, 'test-seed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'verified', 1, 'address-member', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
   `);
   const env = {
     DB,
     EMAIL: { send: async () => ({ messageId: "test-message" }) },
     NOTIFICATION_FROM_EMAIL: "updates@example.test",
-    NOTIFICATION_ADMIN_EMAIL: "admin@example.invalid",
+    NOTIFICATION_ADMIN_EMAIL_SECRET: "admin@example.test",
+    NOTIFICATION_PROTECTED_EMAILS: "admin@example.test,member@example.test",
     CLOUDFLARE_ACCOUNT_ID: "test-account",
     EMAIL_ROUTING_API_TOKEN: "test-token",
     EMAIL_ROUTING_API_FETCH: emailRoutingFetch([
-      { id: "address-eric", email: "admin@example.invalid", verified: "2026-07-03T00:00:00Z" },
-      { id: "address-britney", email: "member@example.invalid", verified: "2026-07-03T00:00:00Z" },
+      { id: "address-admin", email: "admin@example.test", verified: "2026-07-03T00:00:00Z" },
+      { id: "address-member", email: "member@example.test", verified: "2026-07-03T00:00:00Z" },
       { id: "address-outsider", email: "outsider@example.test", verified: "2026-07-03T00:00:00Z" },
     ]),
   };
@@ -1007,7 +1014,7 @@ test("watchlist update email preferences support multiple selected times", async
   assert.equal(saved.data.notify_1000, false);
   assert.equal(saved.data.notify_1800, true);
   assert.equal(saved.data.delivery_available, true);
-  assert.equal(saved.data.email, "admin@example.invalid");
+  assert.equal(saved.data.email, "admin@example.test");
   assert.equal(saved.data.can_configure_notifications, true);
   assert.equal(saved.data.is_notification_admin, true);
 
@@ -1045,7 +1052,7 @@ test("watchlist update email preferences support multiple selected times", async
   const recipientsBeforePayload = await recipientsBefore.json();
   assert.deepEqual(
     recipientsBeforePayload.data.map((row) => row.email).sort(),
-    ["member@example.invalid", "admin@example.invalid"],
+    ["admin@example.test", "member@example.test"],
   );
 
   const allowOutsider = await worker.fetch(request("/api/watchlist/notification-recipients", {

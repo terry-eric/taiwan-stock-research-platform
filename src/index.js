@@ -5685,8 +5685,18 @@ function normalizeNotificationEmail(value) {
 }
 
 function isNotificationAdmin(user, env) {
-  const adminEmail = normalizeNotificationEmail(env.NOTIFICATION_ADMIN_EMAIL || "admin@example.invalid");
-  return normalizeNotificationEmail(user?.email) === adminEmail;
+  const adminEmail = normalizeNotificationEmail(env.NOTIFICATION_ADMIN_EMAIL_SECRET || env.NOTIFICATION_ADMIN_EMAIL);
+  return Boolean(adminEmail) && normalizeNotificationEmail(user?.email) === adminEmail;
+}
+
+function notificationProtectedEmails(env) {
+  const emails = String(env.NOTIFICATION_PROTECTED_EMAILS || "")
+    .split(",")
+    .map(normalizeNotificationEmail)
+    .filter(Boolean);
+  const adminEmail = normalizeNotificationEmail(env.NOTIFICATION_ADMIN_EMAIL_SECRET || env.NOTIFICATION_ADMIN_EMAIL);
+  if (adminEmail) emails.push(adminEmail);
+  return new Set(emails);
 }
 
 function notificationRoutingConfigured(env) {
@@ -5849,7 +5859,8 @@ async function saveNotificationPreferences(db, user, env, body) {
   return { ...notificationPreferencePayload(values, user, env, access), updated_at: values.updated_at };
 }
 
-async function listNotificationRecipients(db) {
+async function listNotificationRecipients(db, env) {
+  const protectedEmails = notificationProtectedEmails(env);
   const { results } = await db.prepare(`
     select
       a.email,
@@ -5876,6 +5887,7 @@ async function listNotificationRecipients(db) {
     ...row,
     enabled: Boolean(row.enabled),
     activation_requested: Boolean(row.activation_requested),
+    protected: protectedEmails.has(normalizeNotificationEmail(row.email)),
     registered: Boolean(row.user_id),
     notify_0800: Boolean(row.notify_0800),
     notify_1000: Boolean(row.notify_1000),
@@ -5892,7 +5904,7 @@ async function upsertNotificationRecipient(db, adminUser, env, body) {
   }
   const now = new Date().toISOString();
   const activationRequested = body.enabled !== false && body.enabled !== 0;
-  if (!activationRequested && ["admin@example.invalid", "member@example.invalid"].includes(email)) {
+  if (!activationRequested && notificationProtectedEmails(env).has(email)) {
     const error = new Error("預設允許的 Email 不可停用。");
     error.status = 400;
     throw error;
@@ -9253,10 +9265,9 @@ function watchlistLedgerHtml(env) {
     }
   }
   function renderNotificationRecipients(rows) {
-    const protectedEmails = new Set(["admin@example.invalid","member@example.invalid"]);
     notificationAdminList.innerHTML = rows.length ? rows.map((row) => {
       const email = String(row.email || "");
-      const locked = protectedEmails.has(email.toLowerCase());
+      const locked = Boolean(row.protected);
       const verificationStatus = ["verified","pending","error"].includes(row.verification_status) ? row.verification_status : "pending";
       const verificationLabel = verificationStatus === "verified" ? "已驗證" : verificationStatus === "error" ? "驗證失敗" : "待驗證";
       const ready = verificationStatus === "verified";
@@ -9565,7 +9576,7 @@ export default {
         } catch (error) {
           console.error("notification verification sync failed", error?.message || error);
         }
-        const data = await listNotificationRecipients(db);
+        const data = await listNotificationRecipients(db, env);
         return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
       }
 
@@ -9576,7 +9587,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         try {
           const result = await upsertNotificationRecipient(db, user, env, body);
-          const data = (await listNotificationRecipients(db)).map((row) => (
+          const data = (await listNotificationRecipients(db, env)).map((row) => (
             normalizeNotificationEmail(row.email) === result.email
               ? { ...row, verification_email_sent: Boolean(result.verification_email_sent) }
               : row

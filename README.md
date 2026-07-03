@@ -25,8 +25,9 @@
 - 台灣時間 10:00：月營收、加權指數、除權息；週日同步股票名冊。
 - 台灣時間 18:00：收盤行情、估值、三大法人與評分。
 - 交易帳本使用者可複選三個時段，通知寄到 Google 登入信箱。
-- 提醒採 Email 白名單；預設只允許 `admin@example.invalid` 與 `member@example.invalid`。
-- `admin@example.invalid` 可在交易帳本管理特定收件人與個別提醒時段。
+- 提醒採私有 Email 白名單；管理員與受保護收件人只保存在 Cloudflare Worker Secrets 與 D1，不寫入原始碼或 GitHub。
+- 提醒管理員可在交易帳本管理特定收件人與個別提醒時段。
+- `NOTIFICATION_ADMIN_EMAIL_SECRET` 與 `NOTIFICATION_PROTECTED_EMAILS` 必須用 `wrangler secret put` 設定。
 - 管理員新增 Email 時，Worker 會透過 Cloudflare Email Routing 建立目的地址並寄出驗證信；未驗證地址不會啟用排程通知。
 - `CLOUDFLARE_ACCOUNT_ID` 可放在 `wrangler.toml`；具最小權限 `Email Routing Addresses Write` 的權杖必須用 `wrangler secret put EMAIL_ROUTING_API_TOKEN` 設定，禁止寫入檔案或 Git。
 - 寄信使用 Cloudflare `send_email` binding，不在程式碼或 GitHub 保存 API 金鑰。
