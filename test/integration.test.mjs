@@ -64,6 +64,26 @@ function request(path, init) {
   return new Request(`https://example.test${path}`, init);
 }
 
+function emailRoutingFetch(addresses = []) {
+  return async (_url, init = {}) => {
+    if ((init.method || "GET").toUpperCase() === "POST") {
+      const body = JSON.parse(init.body || "{}");
+      const address = {
+        id: `address-${addresses.length + 1}`,
+        email: body.email,
+        verified: null,
+      };
+      addresses.push(address);
+      return Response.json({ success: true, result: address });
+    }
+    return Response.json({
+      success: true,
+      result: addresses,
+      result_info: { page: 1, per_page: 50, total_pages: 1, total_count: addresses.length },
+    });
+  };
+}
+
 test("expanded stock filters and classification quality execute against the migrated schema", async () => {
   const DB = new D1TestDatabase();
   const env = { DB, ADMIN_SYNC_TOKEN: "test-secret" };
@@ -919,6 +939,13 @@ test("watchlist update email preferences support multiple selected times", async
     EMAIL: { send: async () => ({ messageId: "test-message" }) },
     NOTIFICATION_FROM_EMAIL: "updates@example.test",
     NOTIFICATION_ADMIN_EMAIL: "admin@example.invalid",
+    CLOUDFLARE_ACCOUNT_ID: "test-account",
+    EMAIL_ROUTING_API_TOKEN: "test-token",
+    EMAIL_ROUTING_API_FETCH: emailRoutingFetch([
+      { id: "address-eric", email: "admin@example.invalid", verified: "2026-07-03T00:00:00Z" },
+      { id: "address-britney", email: "member@example.invalid", verified: "2026-07-03T00:00:00Z" },
+      { id: "address-outsider", email: "outsider@example.test", verified: "2026-07-03T00:00:00Z" },
+    ]),
   };
   const headers = { cookie: "twstock_watchlist=notify-token", "content-type": "application/json" };
   const saveResponse = await worker.fetch(request("/api/watchlist/notifications", {
@@ -995,6 +1022,18 @@ test("watchlist update email preferences support multiple selected times", async
     headers: { cookie: "twstock_watchlist=outsider-token" },
   }), env, {});
   assert.equal(outsiderAdminList.status, 403);
+
+  const addPending = await worker.fetch(request("/api/watchlist/notification-recipients", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ email: "pending@example.test", enabled: true }),
+  }), env, {});
+  assert.equal(addPending.status, 200);
+  const addPendingPayload = await addPending.json();
+  const pendingRecipient = addPendingPayload.data.find((row) => row.email === "pending@example.test");
+  assert.equal(pendingRecipient.verification_status, "pending");
+  assert.equal(pendingRecipient.enabled, false);
+  assert.equal(pendingRecipient.verification_email_sent, true);
 });
 
 test("scheduled update email describes updated content, changes, and failures", () => {

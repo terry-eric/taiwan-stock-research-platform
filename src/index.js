@@ -5643,11 +5643,98 @@ function isNotificationAdmin(user, env) {
   return normalizeNotificationEmail(user?.email) === adminEmail;
 }
 
+function notificationRoutingConfigured(env) {
+  return Boolean(env.CLOUDFLARE_ACCOUNT_ID && env.EMAIL_ROUTING_API_TOKEN);
+}
+
+async function cloudflareEmailRoutingRequest(env, path = "", init = {}) {
+  if (!notificationRoutingConfigured(env)) {
+    const error = new Error("Email 驗證信服務尚未設定，請先設定 EMAIL_ROUTING_API_TOKEN。");
+    error.status = 503;
+    throw error;
+  }
+  const apiFetch = typeof env.EMAIL_ROUTING_API_FETCH === "function"
+    ? env.EMAIL_ROUTING_API_FETCH
+    : fetch;
+  const response = await apiFetch(
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.CLOUDFLARE_ACCOUNT_ID)}/email/routing/addresses${path}`,
+    {
+      ...init,
+      headers: {
+        authorization: `Bearer ${env.EMAIL_ROUTING_API_TOKEN}`,
+        "content-type": "application/json",
+        ...(init.headers || {}),
+      },
+    },
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.success === false) {
+    const detail = (payload.errors || []).map((item) => item.message).filter(Boolean).join("；");
+    const error = new Error(detail || `Cloudflare Email Routing API ${response.status}`);
+    error.status = response.status === 401 || response.status === 403 ? 503 : 502;
+    throw error;
+  }
+  return payload;
+}
+
+async function listCloudflareDestinationAddresses(env) {
+  const rows = [];
+  for (let page = 1; page <= 20; page++) {
+    const payload = await cloudflareEmailRoutingRequest(env, `?page=${page}&per_page=50`);
+    rows.push(...(payload.result || []));
+    if (page >= Number(payload.result_info?.total_pages || 1)) break;
+  }
+  return rows;
+}
+
+async function ensureCloudflareDestinationAddress(env, email) {
+  const existing = (await listCloudflareDestinationAddresses(env))
+    .find((row) => normalizeNotificationEmail(row.email) === email);
+  if (existing) return { address: existing, verification_email_sent: false };
+  const payload = await cloudflareEmailRoutingRequest(env, "", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+  return { address: payload.result || { email }, verification_email_sent: true };
+}
+
+async function syncNotificationAddressVerification(db, env) {
+  if (!notificationRoutingConfigured(env)) return { configured: false, updated: 0 };
+  const addresses = await listCloudflareDestinationAddresses(env);
+  const now = new Date().toISOString();
+  let updated = 0;
+  for (const address of addresses) {
+    const email = normalizeNotificationEmail(address.email);
+    if (!email) continue;
+    const verifiedAt = address.verified || null;
+    const result = await db.prepare(`
+      update notification_email_allowlist
+      set
+        provider_address_id = ?,
+        verification_status = ?,
+        verified_at = ?,
+        enabled = case when activation_requested = 1 and ? is not null then 1 else 0 end,
+        verification_error = null,
+        updated_at = ?
+      where lower(email) = ?
+    `).bind(
+      address.id || null,
+      verifiedAt ? "verified" : "pending",
+      verifiedAt,
+      verifiedAt,
+      now,
+      email,
+    ).run();
+    updated += Number(result.meta?.changes || 0);
+  }
+  return { configured: true, updated };
+}
+
 async function notificationAccess(db, user, env) {
   const email = normalizeNotificationEmail(user?.email);
   const allowed = await db.prepare(`
     select enabled from notification_email_allowlist
-    where lower(email) = ? and enabled = 1
+    where lower(email) = ? and enabled = 1 and verification_status = 'verified'
   `).bind(email).first();
   return {
     allowed: Boolean(allowed),
@@ -5723,6 +5810,11 @@ async function listNotificationRecipients(db) {
       a.enabled,
       a.added_by,
       a.updated_at,
+      a.verification_status,
+      a.activation_requested,
+      a.verification_requested_at,
+      a.verified_at,
+      a.verification_error,
       u.id as user_id,
       u.name,
       u.last_login_at,
@@ -5737,6 +5829,7 @@ async function listNotificationRecipients(db) {
   return (results || []).map((row) => ({
     ...row,
     enabled: Boolean(row.enabled),
+    activation_requested: Boolean(row.activation_requested),
     registered: Boolean(row.user_id),
     notify_0800: Boolean(row.notify_0800),
     notify_1000: Boolean(row.notify_1000),
@@ -5744,7 +5837,7 @@ async function listNotificationRecipients(db) {
   }));
 }
 
-async function upsertNotificationRecipient(db, adminUser, body) {
+async function upsertNotificationRecipient(db, adminUser, env, body) {
   const email = normalizeNotificationEmail(body.email);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     const error = new Error("請輸入有效的 Email。");
@@ -5752,27 +5845,78 @@ async function upsertNotificationRecipient(db, adminUser, body) {
     throw error;
   }
   const now = new Date().toISOString();
-  const enabled = body.enabled !== false && body.enabled !== 0;
-  if (!enabled && ["admin@example.invalid", "member@example.invalid"].includes(email)) {
+  const activationRequested = body.enabled !== false && body.enabled !== 0;
+  if (!activationRequested && ["admin@example.invalid", "member@example.invalid"].includes(email)) {
     const error = new Error("預設允許的 Email 不可停用。");
     error.status = 400;
     throw error;
   }
+  if (!activationRequested) {
+    await db.prepare(`
+      update notification_email_allowlist
+      set enabled = 0, activation_requested = 0, updated_at = ?
+      where lower(email) = ?
+    `).bind(now, email).run();
+    return { email, enabled: false, verification_email_sent: false };
+  }
+  const current = await db.prepare(`
+    select verification_status, provider_address_id, verified_at
+    from notification_email_allowlist where lower(email) = ? limit 1
+  `).bind(email).first();
+  const routingResult = current?.verification_status === "verified"
+    ? {
+        address: {
+          id: current.provider_address_id,
+          email,
+          verified: current.verified_at,
+        },
+        verification_email_sent: false,
+      }
+    : await ensureCloudflareDestinationAddress(env, email);
+  const address = routingResult.address || {};
+  const verifiedAt = address.verified || null;
+  const verificationStatus = verifiedAt ? "verified" : "pending";
   await db.prepare(`
-    insert into notification_email_allowlist (email, enabled, added_by, created_at, updated_at)
-    values (?, ?, ?, ?, ?)
+    insert into notification_email_allowlist (
+      email, enabled, added_by, created_at, updated_at, verification_status,
+      activation_requested, provider_address_id, verification_requested_at,
+      verified_at, verification_error
+    )
+    values (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, null)
     on conflict(email) do update set
       enabled = excluded.enabled,
       added_by = excluded.added_by,
-      updated_at = excluded.updated_at
-  `).bind(email, enabled ? 1 : 0, normalizeNotificationEmail(adminUser.email), now, now).run();
+      updated_at = excluded.updated_at,
+      verification_status = excluded.verification_status,
+      activation_requested = 1,
+      provider_address_id = coalesce(excluded.provider_address_id, notification_email_allowlist.provider_address_id),
+      verification_requested_at = coalesce(notification_email_allowlist.verification_requested_at, excluded.verification_requested_at),
+      verified_at = excluded.verified_at,
+      verification_error = null
+  `).bind(
+    email,
+    verifiedAt ? 1 : 0,
+    normalizeNotificationEmail(adminUser.email),
+    now,
+    now,
+    verificationStatus,
+    address.id || null,
+    routingResult.verification_email_sent ? now : null,
+    verifiedAt,
+  ).run();
   const target = await db.prepare(`
     select id, email, name from watchlist_users where lower(email) = ? limit 1
   `).bind(email).first();
   if (target && ["notify_0800", "notify_1000", "notify_1800"].some((key) => key in body)) {
     await writeNotificationPreferences(db, target.id, body);
   }
-  return { email, enabled, registered: Boolean(target) };
+  return {
+    email,
+    enabled: Boolean(verifiedAt),
+    registered: Boolean(target),
+    verification_status: verificationStatus,
+    verification_email_sent: routingResult.verification_email_sent,
+  };
 }
 
 function signedNumber(value, digits = 2) {
@@ -5850,12 +5994,20 @@ function notificationEmailContent(slot, report, recipientName) {
 async function sendScheduledUpdateNotifications(db, env, slot, report, scheduledAt = new Date()) {
   const column = { "08:00": "notify_0800", "10:00": "notify_1000", "18:00": "notify_1800" }[slot];
   if (!column) throw new Error(`Unsupported notification slot: ${slot}`);
+  try {
+    await syncNotificationAddressVerification(db, env);
+  } catch (error) {
+    console.error("notification verification sync failed", error?.message || error);
+  }
   const notificationDate = taipeiDateKey(scheduledAt);
   const recipients = await db.prepare(`
     select u.id, u.email, u.name
     from watchlist_notification_preferences p
     join watchlist_users u on u.id = p.user_id
-    join notification_email_allowlist a on lower(a.email) = lower(u.email) and a.enabled = 1
+    join notification_email_allowlist a
+      on lower(a.email) = lower(u.email)
+      and a.enabled = 1
+      and a.verification_status = 'verified'
     where p.${column} = 1
     order by u.id
     limit 500
@@ -8750,7 +8902,7 @@ function watchlistLedgerHtml(env) {
     form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}label{display:grid;gap:5px;min-width:0;color:var(--muted);font-size:.78rem;font-weight:900}.wide{grid-column:span 2}input,select{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:inherit;background:#fff}button{border:0;border-radius:8px;background:var(--green);color:#fff;font-weight:800;padding:10px 14px;cursor:pointer}button.secondary{background:#eef3ef;color:var(--ink)}button.danger{background:#f7e7e4;color:#9d2f26}button:disabled{cursor:not-allowed;opacity:.55}.form-status{grid-column:1/-1;min-height:20px;color:var(--muted)}form>[type="submit"]{grid-column:1/-1;justify-self:start;min-width:150px}.cost-preview{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:10px;background:#fbfcf8}.cost-preview b{border-radius:999px;padding:4px 8px;background:#eef3ef;font-size:.78rem}.fee-help{margin:8px 0 18px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fbfcf8}.fee-help summary{cursor:pointer;color:var(--green);font-weight:900}.fee-help p{margin-top:8px;color:var(--muted);line-height:1.65}.fee-help a{color:var(--blue)}
     .summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0}.summary-card{border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.summary-card span,.summary-card small{display:block;color:var(--muted);font-size:.76rem}.summary-card strong{display:block;margin:5px 0;font-size:1.1rem}.up{color:var(--red)!important}.down{color:var(--green)!important}
     .position-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.position{display:block;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff}.position a{display:block;color:inherit;text-decoration:none}.position small{display:block;color:var(--muted);line-height:1.55}.profit-box{display:grid;gap:4px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px}.alert-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.alert-list b{border:1px solid rgba(11,127,95,.24);border-radius:999px;padding:3px 7px;background:rgba(11,127,95,.08);color:var(--green);font-size:.74rem}.empty{border:1px dashed var(--line);border-radius:8px;padding:24px;text-align:center;color:var(--muted)}
-    .history{display:grid;gap:10px;margin-top:10px}.stock-ledger{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}.stock-ledger>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;list-style:none}.stock-ledger>summary::-webkit-details-marker{display:none}.stock-ledger>summary::after{content:"展開";flex:none;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--green);font-size:.72rem;font-weight:900}.stock-ledger[open]>summary::after{content:"收合"}.ledger-title{display:grid;gap:3px;min-width:0}.ledger-title strong{font-size:1rem}.ledger-title small,.ledger-meta{color:var(--muted);font-size:.76rem}.ledger-meta{text-align:right;line-height:1.5}.ledger-transactions{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid var(--line)}.transaction{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.ledger-transactions .transaction:first-child{margin-top:12px}.side-chip{display:inline-flex;border-radius:999px;padding:4px 8px;color:#fff;font-size:.76rem;font-weight:900}.side-buy{background:var(--red)}.side-sell{background:var(--green)}.transaction strong,.transaction small{display:block}.transaction small{margin-top:3px;color:var(--muted);line-height:1.5}.auto-refresh-note{display:block;margin:8px 0 14px;color:var(--muted);font-size:.78rem}.config-hint{border:1px dashed var(--line);border-radius:8px;padding:12px;background:#fbfcf8}.config-hint code{display:block;margin-top:8px;padding:8px;border-radius:6px;background:#eef3ef}.google-disabled{width:100%;background:#eef3ef;color:var(--muted);cursor:not-allowed}.notification-settings{margin-bottom:18px;border:1px solid rgba(40,109,168,.22);border-radius:8px;padding:14px;background:rgba(40,109,168,.05)}.notification-settings h2{margin-bottom:5px}.notification-settings.notification-locked{border-color:var(--line);background:#f0f2f0;color:var(--muted)}.notification-settings.notification-locked .notification-option{background:#e8ebe8;cursor:not-allowed;opacity:.72}.notification-options{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.notification-option{display:flex;grid-template-columns:none;align-items:flex-start;gap:8px;min-width:190px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff;color:var(--ink);cursor:pointer}.notification-option input{width:18px;height:18px;margin:1px 0 0;accent-color:var(--green)}.notification-option span{display:grid;gap:2px}.notification-option small{color:var(--muted);font-weight:700;line-height:1.4}.notification-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.notification-status{color:var(--muted);font-size:.8rem;font-weight:800}.notification-admin{margin:12px 0 20px;border:1px solid rgba(11,127,95,.25);border-radius:8px;padding:14px;background:#f7fbf8}.notification-admin-create{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:10px 0}.notification-admin-list{display:grid;gap:8px}.notification-recipient{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.notification-recipient strong,.notification-recipient small{display:block}.notification-recipient small{color:var(--muted);line-height:1.45}.notification-recipient-slots{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.notification-recipient-slots label{display:flex;align-items:center;gap:4px;color:var(--ink)}.notification-recipient-slots input{width:16px;height:16px}.notification-recipient-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.notification-recipient-actions .danger{padding:8px 10px}
+    .history{display:grid;gap:10px;margin-top:10px}.stock-ledger{border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}.stock-ledger>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;cursor:pointer;list-style:none}.stock-ledger>summary::-webkit-details-marker{display:none}.stock-ledger>summary::after{content:"展開";flex:none;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:var(--green);font-size:.72rem;font-weight:900}.stock-ledger[open]>summary::after{content:"收合"}.ledger-title{display:grid;gap:3px;min-width:0}.ledger-title strong{font-size:1rem}.ledger-title small,.ledger-meta{color:var(--muted);font-size:.76rem}.ledger-meta{text-align:right;line-height:1.5}.ledger-transactions{display:grid;gap:8px;padding:0 12px 12px;border-top:1px solid var(--line)}.transaction{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.ledger-transactions .transaction:first-child{margin-top:12px}.side-chip{display:inline-flex;border-radius:999px;padding:4px 8px;color:#fff;font-size:.76rem;font-weight:900}.side-buy{background:var(--red)}.side-sell{background:var(--green)}.transaction strong,.transaction small{display:block}.transaction small{margin-top:3px;color:var(--muted);line-height:1.5}.auto-refresh-note{display:block;margin:8px 0 14px;color:var(--muted);font-size:.78rem}.config-hint{border:1px dashed var(--line);border-radius:8px;padding:12px;background:#fbfcf8}.config-hint code{display:block;margin-top:8px;padding:8px;border-radius:6px;background:#eef3ef}.google-disabled{width:100%;background:#eef3ef;color:var(--muted);cursor:not-allowed}.notification-settings{margin-bottom:18px;border:1px solid rgba(40,109,168,.22);border-radius:8px;padding:14px;background:rgba(40,109,168,.05)}.notification-settings h2{margin-bottom:5px}.notification-settings.notification-locked{border-color:var(--line);background:#f0f2f0;color:var(--muted)}.notification-settings.notification-locked .notification-option{background:#e8ebe8;cursor:not-allowed;opacity:.72}.notification-options{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.notification-option{display:flex;grid-template-columns:none;align-items:flex-start;gap:8px;min-width:190px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff;color:var(--ink);cursor:pointer}.notification-option input{width:18px;height:18px;margin:1px 0 0;accent-color:var(--green)}.notification-option span{display:grid;gap:2px}.notification-option small{color:var(--muted);font-weight:700;line-height:1.4}.notification-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.notification-status{color:var(--muted);font-size:.8rem;font-weight:800}.notification-admin{margin:12px 0 20px;border:1px solid rgba(11,127,95,.25);border-radius:8px;padding:14px;background:#f7fbf8}.notification-admin-create{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:10px 0}.notification-admin-list{display:grid;gap:8px}.notification-recipient{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;border:1px solid var(--line);border-radius:8px;padding:11px;background:#fff}.notification-recipient strong,.notification-recipient small{display:block}.notification-recipient small{color:var(--muted);line-height:1.45}.verification-badge{display:inline-flex;margin-left:7px;border-radius:999px;padding:2px 7px;font-size:.7rem;font-weight:900;vertical-align:middle}.verification-badge.verified{background:#e6f5ef;color:var(--green)}.verification-badge.pending{background:#fff3d6;color:#8a5b00}.verification-badge.error{background:#fde9e7;color:#a5332a}.notification-recipient-slots{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.notification-recipient-slots label{display:flex;align-items:center;gap:4px;color:var(--ink)}.notification-recipient-slots input{width:16px;height:16px}.notification-recipient-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.notification-recipient-actions .danger{padding:8px 10px}
     @media(max-width:900px){form{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:1/-1}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.hero,.position-grid,form{grid-template-columns:1fr}.wide{grid-column:auto}.nav{align-items:flex-start;flex-direction:column}.summary-grid{grid-template-columns:1fr 1fr}.transaction{grid-template-columns:auto minmax(0,1fr)}.transaction .danger{grid-column:1/-1}.trade-tabs button{flex:1;min-width:0}.stock-ledger>summary{align-items:flex-start}.ledger-meta{text-align:left}.stock-ledger>summary::after{margin-left:auto}.notification-admin-create,.notification-recipient{grid-template-columns:1fr}.notification-recipient-actions{justify-content:flex-start}}@media(max-width:430px){.summary-grid{grid-template-columns:1fr}.stock-ledger>summary{display:grid;grid-template-columns:minmax(0,1fr) auto}.ledger-meta{grid-column:1/-1}}
   </style>
   ${clientId ? '<script src="https://accounts.google.com/gsi/client" async defer></script>' : ''}
@@ -8774,7 +8926,7 @@ function watchlistLedgerHtml(env) {
     </div>
     <div class="notification-admin" data-notification-admin hidden>
       <h2>特定收件人管理</h2>
-      <p class="muted">僅提醒管理員可見。新增已登入的 Email 後，可直接替該帳號設定提醒時段；尚未登入的 Email 會先保留資格。</p>
+      <p class="muted">僅提醒管理員可見。每個新 Email 都會先收到 Cloudflare 驗證信；完成驗證並使用 Google 登入後，才能啟用提醒時段。</p>
       <div class="notification-admin-create"><input type="email" data-notification-admin-email placeholder="輸入要開放提醒的 Email"><button type="button" data-notification-admin-add>新增 Email</button></div>
       <div class="notification-admin-list" data-notification-admin-list></div>
       <span class="notification-status" data-notification-admin-status role="status" aria-live="polite"></span>
@@ -9059,7 +9211,12 @@ function watchlistLedgerHtml(env) {
     notificationAdminList.innerHTML = rows.length ? rows.map((row) => {
       const email = String(row.email || "");
       const locked = protectedEmails.has(email.toLowerCase());
-      return '<article class="notification-recipient" data-notification-recipient="' + esc(email) + '"><div><strong>' + esc(email) + '</strong><small>' + esc(row.registered ? (row.name || "已登入帳號") : "尚未使用 Google 登入；登入後才可設定時段") + '</small>' + (row.registered ? '<div class="notification-recipient-slots"><label><input type="checkbox" data-recipient-slot="notify_0800"' + (row.notify_0800 ? " checked" : "") + '>08:00</label><label><input type="checkbox" data-recipient-slot="notify_1000"' + (row.notify_1000 ? " checked" : "") + '>10:00</label><label><input type="checkbox" data-recipient-slot="notify_1800"' + (row.notify_1800 ? " checked" : "") + '>18:00</label></div>' : "") + '</div><div class="notification-recipient-actions">' + (row.registered ? '<button type="button" data-save-recipient>儲存此人提醒</button>' : "") + (locked ? "" : '<button type="button" class="danger" data-disable-recipient>停用</button>') + '</div></article>';
+      const verificationStatus = ["verified","pending","error"].includes(row.verification_status) ? row.verification_status : "pending";
+      const verificationLabel = verificationStatus === "verified" ? "已驗證" : verificationStatus === "error" ? "驗證失敗" : "待驗證";
+      const ready = verificationStatus === "verified";
+      const accountText = row.registered ? (row.name || "已登入帳號") : "尚未使用 Google 登入";
+      const verificationText = ready ? accountText : accountText + "；請先點擊信中的驗證連結";
+      return '<article class="notification-recipient" data-notification-recipient="' + esc(email) + '"><div><strong>' + esc(email) + '<span class="verification-badge ' + verificationStatus + '">' + verificationLabel + '</span></strong><small>' + esc(verificationText) + '</small>' + (row.registered ? '<div class="notification-recipient-slots"><label><input type="checkbox" data-recipient-slot="notify_0800"' + (row.notify_0800 ? " checked" : "") + (ready ? "" : " disabled") + '>08:00</label><label><input type="checkbox" data-recipient-slot="notify_1000"' + (row.notify_1000 ? " checked" : "") + (ready ? "" : " disabled") + '>10:00</label><label><input type="checkbox" data-recipient-slot="notify_1800"' + (row.notify_1800 ? " checked" : "") + (ready ? "" : " disabled") + '>18:00</label></div>' : "") + '</div><div class="notification-recipient-actions">' + (row.registered && ready ? '<button type="button" data-save-recipient>儲存此人提醒</button>' : "") + (locked ? "" : '<button type="button" class="danger" data-disable-recipient>停用</button>') + '</div></article>';
     }).join("") : '<div class="empty">目前沒有允許提醒的 Email。</div>';
   }
   async function loadNotificationRecipients() {
@@ -9069,6 +9226,7 @@ function watchlistLedgerHtml(env) {
   async function updateNotificationRecipient(payload) {
     const rows = await api("/api/watchlist/notification-recipients", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
     renderNotificationRecipients(rows);
+    return rows.find((row) => String(row.email || "").toLowerCase() === String(payload.email || "").toLowerCase()) || null;
   }
   async function boot() {
     try { const user = await api("/api/auth/me"); renderUser(user); app.hidden = false; await Promise.all([loadPortfolio(), loadNotificationPreferences()]); }
@@ -9134,9 +9292,13 @@ function watchlistLedgerHtml(env) {
     if (!email) { notificationAdminStatus.textContent = "請輸入 Email。"; return; }
     notificationAdminAdd.disabled = true;
     try {
-      await updateNotificationRecipient({email, enabled:true});
+      const recipient = await updateNotificationRecipient({email, enabled:true});
       notificationAdminEmail.value = "";
-      notificationAdminStatus.textContent = "已開放 " + email + " 的提醒權限。";
+      notificationAdminStatus.textContent = recipient?.verification_email_sent
+        ? "驗證信已寄到 " + email + "；對方點擊連結後才會啟用提醒。"
+        : recipient?.verification_status === "verified"
+          ? email + " 已完成驗證，可以設定提醒。"
+          : email + " 已在 Cloudflare 待驗證清單中，請檢查收件匣或垃圾郵件。";
     } catch(error) {
       notificationAdminStatus.textContent = error.message;
     } finally {
@@ -9352,6 +9514,11 @@ export default {
         const user = await currentWatchlistUser(db, request);
         if (!user) return json({ error: "unauthorized" }, 401);
         if (!isNotificationAdmin(user, env)) return json({ error: "forbidden" }, 403);
+        try {
+          await syncNotificationAddressVerification(db, env);
+        } catch (error) {
+          console.error("notification verification sync failed", error?.message || error);
+        }
         const data = await listNotificationRecipients(db);
         return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
       }
@@ -9362,8 +9529,12 @@ export default {
         if (!isNotificationAdmin(user, env)) return json({ error: "forbidden" }, 403);
         const body = await request.json().catch(() => ({}));
         try {
-          await upsertNotificationRecipient(db, user, body);
-          const data = await listNotificationRecipients(db);
+          const result = await upsertNotificationRecipient(db, user, env, body);
+          const data = (await listNotificationRecipients(db)).map((row) => (
+            normalizeNotificationEmail(row.email) === result.email
+              ? { ...row, verification_email_sent: Boolean(result.verification_email_sent) }
+              : row
+          ));
           return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
         } catch (error) {
           return json({ error: error.message || "notification recipient update failed" }, error.status || 500);

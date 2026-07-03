@@ -27,6 +27,8 @@
 - 交易帳本使用者可複選三個時段，通知寄到 Google 登入信箱。
 - 提醒採 Email 白名單；預設只允許 `admin@example.invalid` 與 `member@example.invalid`。
 - `admin@example.invalid` 可在交易帳本管理特定收件人與個別提醒時段。
+- 管理員新增 Email 時，Worker 會透過 Cloudflare Email Routing 建立目的地址並寄出驗證信；未驗證地址不會啟用排程通知。
+- `CLOUDFLARE_ACCOUNT_ID` 可放在 `wrangler.toml`；具最小權限 `Email Routing Addresses Write` 的權杖必須用 `wrangler secret put EMAIL_ROUTING_API_TOKEN` 設定，禁止寫入檔案或 Git。
 - 寄信使用 Cloudflare `send_email` binding，不在程式碼或 GitHub 保存 API 金鑰。
 - 正式寄信前須在 Cloudflare Email Service 啟用 `terry878.org` 寄件網域；任意收件人寄送需要符合 Cloudflare 方案與額度。
 

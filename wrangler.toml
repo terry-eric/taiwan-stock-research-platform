@@ -15,6 +15,7 @@ crons = ["0 0,2,10 * * *"]
 [vars]
 NOTIFICATION_FROM_EMAIL = "updates@terry878.org"
 NOTIFICATION_ADMIN_EMAIL = "admin@example.invalid"
+CLOUDFLARE_ACCOUNT_ID = "da2fb9d659c49b5073d1aa900e84f9ab"
 
 [[send_email]]
 name = "EMAIL"
