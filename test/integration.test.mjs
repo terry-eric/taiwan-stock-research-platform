@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import worker, { normalizeTwseMiIndexDailyRow, notificationEmailContent } from "../src/index.js";
+import worker, {
+  normalizeTwseMiIndexDailyRow,
+  normalizeYahooIndexResult,
+  notificationEmailContent,
+} from "../src/index.js";
 
 class D1Statement {
   constructor(database, sql, values = []) {
@@ -618,10 +622,11 @@ test("global market endpoint combines five indices with the nearest TAIFEX night
           result: [{
             meta: {
               regularMarketPrice: 21000,
-              chartPreviousClose: 20800,
+              chartPreviousClose: 19000,
               regularMarketTime: 1782921600,
               currency: "USD",
             },
+            timestamp: [1782826200, 1782912600],
             indicators: { quote: [{ close: [20800, 21000] }] },
           }],
           error: null,
@@ -644,6 +649,8 @@ test("global market endpoint combines five indices with the nearest TAIFEX night
     assert.equal(payload.data.length, 6);
     assert.equal(payload.data[0].label, "道瓊工業");
     assert.equal(payload.data[0].country, "美國");
+    assert.equal(payload.data[0].change, 200);
+    assert.ok(Math.abs(payload.data[0].change_percent - (200 / 20800 * 100)) < 0.000001);
     assert.equal(payload.data[5].label, "台指期夜盤");
     assert.equal(payload.data[5].country, "台灣");
     assert.equal(payload.data[5].contract_month, "202607");
@@ -651,6 +658,47 @@ test("global market endpoint combines five indices with the nearest TAIFEX night
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("global index normalization uses completed daily closes and excludes an open session", () => {
+  const definition = { symbol: "^KS11", label: "KOSPI", country: "韓國", market: "韓國市場" };
+  const day = (value) => Date.parse(`${value}T00:00:00+09:00`) / 1000;
+  const result = {
+    meta: {
+      regularMarketPrice: 7976.67,
+      chartPreviousClose: 8411.21,
+      regularMarketTime: Date.parse("2026-07-03T12:00:00+09:00") / 1000,
+      exchangeTimezoneName: "Asia/Seoul",
+      currency: "KRW",
+      currentTradingPeriod: {
+        regular: {
+          start: Date.parse("2026-07-03T09:00:00+09:00") / 1000,
+          end: Date.parse("2026-07-03T15:30:00+09:00") / 1000,
+        },
+      },
+    },
+    timestamp: [day("2026-07-01"), day("2026-07-02"), day("2026-07-03")],
+    indicators: { quote: [{ close: [8303.41, 7648.09, 7976.67] }] },
+  };
+  const duringSession = normalizeYahooIndexResult(
+    definition,
+    result,
+    Date.parse("2026-07-03T12:00:00+09:00") / 1000,
+  );
+  assert.equal(duringSession.price, 7648.09);
+  assert.ok(Math.abs(duringSession.change - (7648.09 - 8303.41)) < 0.000001);
+  assert.equal(duringSession.data_date, "2026-07-02");
+  assert.equal(duringSession.market_time, "2026-07-02 收盤");
+
+  const afterClose = normalizeYahooIndexResult(
+    definition,
+    result,
+    Date.parse("2026-07-03T16:00:00+09:00") / 1000,
+  );
+  assert.equal(afterClose.price, 7976.67);
+  assert.ok(Math.abs(afterClose.change - (7976.67 - 7648.09)) < 0.000001);
+  assert.ok(Math.abs(afterClose.change_percent - ((7976.67 - 7648.09) / 7648.09 * 100)) < 0.000001);
+  assert.equal(afterClose.data_date, "2026-07-03");
 });
 
 test("08:00 scheduler stores global market snapshots without blocking on email", async () => {

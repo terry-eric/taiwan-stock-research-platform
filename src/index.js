@@ -43,7 +43,7 @@ const GLOBAL_INDEX_DEFINITIONS = [
   { symbol: "^N225", label: "日經 225", country: "日本", market: "東京市場" },
   { symbol: "^KS11", label: "KOSPI", country: "韓國", market: "韓國市場" },
 ];
-const PERFORMANCE_ASSET_VERSION = "20260703-20";
+const PERFORMANCE_ASSET_VERSION = "20260703-21";
 const PWA_HEAD = `
   <meta name="theme-color" content="#0d2f58">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -5468,7 +5468,21 @@ function marketTimeLabel(unixSeconds) {
   }).format(new Date(Number(unixSeconds) * 1000));
 }
 
-async function fetchGlobalIndex(definition) {
+function marketDateLabel(unixSeconds, timeZone = "UTC") {
+  if (!Number.isFinite(Number(unixSeconds))) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(Number(unixSeconds) * 1000));
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return values.year && values.month && values.day
+    ? `${values.year}-${values.month}-${values.day}`
+    : null;
+}
+
+function normalizeYahooIndexResult(definition, result, nowUnix = Date.now() / 1000) {
   const fallback = {
     kind: "index",
     symbol: definition.symbol,
@@ -5479,8 +5493,54 @@ async function fetchGlobalIndex(definition) {
     change: null,
     change_percent: null,
     market_time: null,
+    data_date: null,
+    session: "收盤",
     status: "unavailable",
   };
+  const meta = result?.meta || {};
+  const timeZone = meta.exchangeTimezoneName || "UTC";
+  const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
+  const rawCloses = result?.indicators?.quote?.[0]?.close || [];
+  const dailyCloses = timestamps.map((timestamp, index) => ({
+    timestamp: toNumber(timestamp),
+    close: toNumber(rawCloses[index]),
+  })).filter((item) => item.timestamp !== null && item.close !== null);
+  const regular = meta.currentTradingPeriod?.regular || {};
+  const marketOpen = Number.isFinite(Number(regular.start))
+    && Number.isFinite(Number(regular.end))
+    && nowUnix >= Number(regular.start)
+    && nowUnix < Number(regular.end);
+  const latest = dailyCloses.at(-1);
+  if (
+    marketOpen
+    && dailyCloses.length >= 2
+    && marketDateLabel(latest?.timestamp, timeZone) === marketDateLabel(nowUnix, timeZone)
+  ) {
+    dailyCloses.pop();
+  }
+  const completed = dailyCloses.at(-1);
+  const previousCompleted = dailyCloses.at(-2);
+  const price = completed?.close ?? toNumber(meta.regularMarketPrice);
+  const previous = previousCompleted?.close
+    ?? toNumber(meta.previousClose)
+    ?? toNumber(meta.chartPreviousClose);
+  if (price === null) return fallback;
+  const change = previous === null ? null : price - previous;
+  const dataDate = marketDateLabel(completed?.timestamp ?? meta.regularMarketTime, timeZone);
+  return {
+    ...fallback,
+    price,
+    change,
+    change_percent: previous ? change / previous * 100 : null,
+    market_time: dataDate ? `${dataDate} 收盤` : marketTimeLabel(meta.regularMarketTime),
+    data_date: dataDate,
+    currency: meta.currency || null,
+    status: "ok",
+  };
+}
+
+async function fetchGlobalIndex(definition) {
+  const fallback = normalizeYahooIndexResult(definition, null);
   try {
     const response = await fetch(`${SOURCE_YAHOO_FINANCE_CHART}/${encodeURIComponent(definition.symbol)}?range=5d&interval=1d`, {
       headers: {
@@ -5491,21 +5551,7 @@ async function fetchGlobalIndex(definition) {
     });
     if (!response.ok) return fallback;
     const result = (await response.json())?.chart?.result?.[0];
-    const meta = result?.meta || {};
-    const closes = (result?.indicators?.quote?.[0]?.close || []).filter((item) => Number.isFinite(Number(item)));
-    const price = toNumber(meta.regularMarketPrice) ?? toNumber(closes.at(-1));
-    const previous = toNumber(meta.chartPreviousClose) ?? toNumber(meta.previousClose) ?? toNumber(closes.at(-2));
-    if (price === null) return fallback;
-    const change = previous === null ? null : price - previous;
-    return {
-      ...fallback,
-      price,
-      change,
-      change_percent: previous ? change / previous * 100 : null,
-      market_time: marketTimeLabel(meta.regularMarketTime),
-      currency: meta.currency || null,
-      status: "ok",
-    };
+    return normalizeYahooIndexResult(definition, result);
   } catch {
     return fallback;
   }
@@ -8517,7 +8563,7 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
   </section>${capitalConcentrationChart}` : ""}
   ${show("home", "market") ? `<section class="panel global-market" data-global-market>
     <p class="eyebrow">Global & Night Session</p>
-    <div class="panel-head"><div><h2>全球指數與台指期夜盤</h2><p class="muted">美股、日韓主要指數與台指期最近月份盤後行情；區塊延遲載入，不阻塞主頁。</p></div><span class="info-dot" tabindex="0" data-tip="國際指數使用 Yahoo Finance 行情；台指期夜盤使用期交所官方每日交易行情。資料快取五分鐘，並標示來源日期。">!</span></div>
+    <div class="panel-head"><div><h2>全球指數與台指期夜盤</h2><p class="muted">美股、日韓主要指數顯示最近完整收盤；開盤中不混入未完成的盤中日 K。台指期顯示最近月份盤後行情。</p></div><span class="info-dot" tabindex="0" data-tip="國際指數使用 Yahoo Finance 日線相鄰兩個完整收盤計算漲跌；台指期夜盤使用期交所官方每日交易行情。資料快取五分鐘，並標示收盤日期。">!</span></div>
     <div class="global-market-grid" data-global-market-grid>
       ${["美國 · 道瓊工業", "美國 · S&P 500", "美國 · NASDAQ", "日本 · 日經 225", "韓國 · KOSPI", "台灣 · 台指期夜盤"].map((label) => `<article class="global-market-card"><span>${label}</span><strong>載入中</strong><em>--</em><small>正在取得行情</small></article>`).join("")}
     </div>
@@ -10229,5 +10275,6 @@ export {
   normalizeTwseMiIndexDailyRow,
   normalizeTpexStockBasic,
   normalizeTwseStockBasic,
+  normalizeYahooIndexResult,
   notificationEmailContent,
 };
