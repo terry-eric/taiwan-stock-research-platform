@@ -4,6 +4,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import worker, {
   normalizeTwseMiIndexDailyRow,
+  normalizeTpexInstitutionalRow,
+  normalizeTpexOtcDailyPrice,
   normalizeYahooIndexResult,
   notificationEmailContent,
 } from "../src/index.js";
@@ -87,6 +89,48 @@ function emailRoutingFetch(addresses = []) {
     });
   };
 }
+
+test("official theme candidates stay private until an administrator approves their evidence", async () => {
+  const DB = new D1TestDatabase();
+  const env = { DB, ADMIN_SYNC_TOKEN: "test-secret" };
+  DB.exec(`
+    insert into theme_candidates (
+      candidate_key, theme_name, status, confidence_score, first_seen_at, last_seen_at,
+      source_count, stock_count, source, evidence_url, rationale, created_at, updated_at
+    ) values (
+      'silicon-photonics', '矽光子與 CPO', 'pending', 85, '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z',
+      1, 1, 'TWSE daily major announcements', 'https://openapi.twse.com.tw/v1/opendata/t187ap04_L', 'test',
+      '2026-09-06T00:00:00Z', '2026-09-06T00:00:00Z'
+    );
+    insert into theme_candidate_evidence (
+      candidate_id, stock_code, stock_name, announcement_date, headline, body_excerpt,
+      matched_keywords, source_url, source_key, created_at
+    ) values (
+      1, '2330', '台積電', '2026-09-06', '矽光子合作案', '官方重大訊息', '矽光子',
+      'https://openapi.twse.com.tw/v1/opendata/t187ap04_L', 'silicon-photonics:2330:2026-09-06', '2026-09-06T00:00:00Z'
+    );
+  `);
+
+  const pending = await worker.fetch(request("/api/admin/theme-candidates?status=pending", {
+    headers: { authorization: "Bearer test-secret" },
+  }), env, {});
+  assert.equal(pending.status, 200);
+  const pendingPayload = await pending.json();
+  assert.equal(pendingPayload.data.length, 1);
+  assert.equal(pendingPayload.data[0].evidence[0].stock_code, "2330");
+  assert.equal(DB.database.prepare("select count(*) as count from themes where theme_name = '矽光子與 CPO'").get().count, 0);
+
+  const approved = await worker.fetch(request("/api/admin/theme-candidates/1/review", {
+    method: "POST",
+    headers: { authorization: "Bearer test-secret", "content-type": "application/json" },
+    body: JSON.stringify({ decision: "approved", reviewed_by: "test" }),
+  }), env, {});
+  assert.equal(approved.status, 200);
+  const approvedPayload = await approved.json();
+  assert.equal(approvedPayload.data.theme_name, "矽光子與 CPO");
+  assert.equal(DB.database.prepare("select status from theme_candidates where id = 1").get().status, "approved");
+  assert.equal(DB.database.prepare("select review_status from stock_themes limit 1").get().review_status, "approved");
+});
 
 test("expanded stock filters and classification quality execute against the migrated schema", async () => {
   const DB = new D1TestDatabase();
@@ -307,6 +351,38 @@ test("a newly observed emerging quote is not misclassified as a common stock", a
   assert.equal(stock.instrument_type, "emerging");
 });
 
+test("identical market rows are skipped while an official correction is applied", async () => {
+  const DB = new D1TestDatabase();
+  const env = { DB, ADMIN_SYNC_TOKEN: "test-secret" };
+  const importRow = (closePrice) => worker.fetch(request("/api/admin/import/twse-daily-price", {
+    method: "POST",
+    headers: { authorization: "Bearer test-secret", "content-type": "application/json" },
+    body: JSON.stringify({
+      rows: [{
+        stock_code: "7998",
+        stock_name: "資料修正測試",
+        market_type: "上市",
+        trade_date: "2099-01-02",
+        close_price: closePrice,
+        source: "integration-test",
+      }],
+    }),
+  }), env, {});
+
+  const first = await (await importRow(10)).json();
+  const duplicate = await (await importRow(10)).json();
+  const corrected = await (await importRow(11)).json();
+  assert.equal(first.data.changed, 1);
+  assert.equal(duplicate.data.changed, 0);
+  assert.equal(duplicate.data.unchanged, 1);
+  assert.equal(corrected.data.changed, 1);
+  assert.equal(DB.database.prepare(`
+    select close_price from daily_prices
+    where stock_id = (select id from stocks where stock_code = '7998' and market_type = '上市')
+      and trade_date = '2099-01-02'
+  `).get().close_price, 11);
+});
+
 test("available-data stock scores are reproducible and unlock recommendations without demo financials", async () => {
   const DB = new D1TestDatabase();
   const response = await worker.fetch(request("/api/admin/scores/recompute", {
@@ -373,6 +449,12 @@ test("hot API responses become cache hits on the second request", async () => {
     assert.equal(second.status, 200);
     assert.equal(second.headers.get("x-cache"), "HIT");
     assert.match(second.headers.get("server-timing") || "", /desc="HIT"/);
+
+    const stockList = await worker.fetch(request("/api/stocks?limit=4&ignored=first"), { DB }, ctx);
+    assert.equal(stockList.headers.get("x-cache"), "MISS");
+    await Promise.all(pending);
+    const stockListWithIgnoredParam = await worker.fetch(request("/api/stocks?ignored=second&limit=4"), { DB }, ctx);
+    assert.equal(stockListWithIgnoredParam.headers.get("x-cache"), "HIT");
   } finally {
     if (originalCaches === undefined) delete globalThis.caches;
     else globalThis.caches = originalCaches;
@@ -401,6 +483,10 @@ test("homepage renders from the migrated schema within the initial HTML budget",
   assert.match(html, /data-global-market/);
   assert.match(html, /美國 · 道瓊工業/);
   assert.match(html, /熱度/);
+  assert.match(html, /data-release-notice-version="2026-09-03-d1-read-optimization"/);
+  assert.match(html, /網站更新完成/);
+  assert.match(html, /twstock-release-notice-version/);
+  assert.match(html, /localStorage\.getItem\(storageKey\) === version/);
   assert.doesNotMatch(html, /id="data-quality"/);
   assert.doesNotMatch(html, /id="stock-screener"/);
   assert.doesNotMatch(html, /data-flow-application-index=/);
@@ -1186,4 +1272,51 @@ test("TWSE MI_INDEX daily row normalizer preserves signed close data", () => {
   assert.equal(row.change_price, -2);
   assert.ok(row.change_percent < 0);
   assert.equal(row.source, "TWSE MI_INDEX");
+});
+
+test("TPEx OpenAPI quote and three-institution rows keep market, date, and signed flows", () => {
+  const quote = normalizeTpexOtcDailyPrice({
+    Date: "1150903",
+    SecuritiesCompanyCode: "6488",
+    CompanyName: "環球晶",
+    Close: "120.5",
+    Change: "-1.5",
+    Open: "122",
+    High: "123",
+    Low: "120",
+    TradingShares: "123,456",
+    TransactionAmount: "14,876,448",
+    TransactionNumber: "321",
+  });
+  assert.deepEqual(quote, {
+    stock_code: "6488",
+    stock_name: "環球晶",
+    market_type: "上櫃",
+    trade_date: "2026-09-03",
+    open_price: 122,
+    high_price: 123,
+    low_price: 120,
+    close_price: 120.5,
+    change_price: -1.5,
+    change_percent: -1.2295081967213115,
+    volume: 123456,
+    turnover_value: 14876448,
+    transaction_count: 321,
+    source: "TPEx OpenAPI",
+    source_url: "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
+  });
+  const flow = normalizeTpexInstitutionalRow({
+    Date: "1150903",
+    SecuritiesCompanyCode: "6488",
+    CompanyName: "環球晶",
+    "ForeignInvestorsIncludeMainlandAreaInvestors-Difference": "-1200",
+    "SecuritiesInvestmentTrustCompanies-Difference": "300",
+    "Dealers-Difference": "50",
+    TotalDifference: "-850",
+  });
+  assert.equal(flow.trade_date, "2026-09-03");
+  assert.equal(flow.foreign_investor_net_buy, -1.2);
+  assert.equal(flow.investment_trust_net_buy, 0.3);
+  assert.equal(flow.dealer_net_buy, 0.05);
+  assert.equal(flow.total_institutional_net_buy, -0.85);
 });

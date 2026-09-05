@@ -2,9 +2,9 @@ import {
   PUBLIC_CLASSIFICATION_CONFIDENCE,
   TAXONOMY_VERSION,
   detectInstrumentType,
+  normalizeTpexInstitutionalCells,
   normalizeIndustryCode,
   normalizeOfficialIndustry,
-  normalizeTpexInstitutionalCells,
   officialIndustryName,
   officialSectorName,
 } from "./taxonomy.js";
@@ -19,18 +19,20 @@ const SOURCE_TWSE_STOCK_DAY_HISTORY = "https://www.twse.com.tw/exchangeReport/ST
 const SOURCE_TPEX_OTC_STOCK_BASIC = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O";
 const SOURCE_TPEX_EMERGING_STOCK_BASIC = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_R";
 const SOURCE_TPEX_OTC_DAILY_PRICE = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes";
-const SOURCE_TPEX_EMERGING_DAILY_PRICE = "https://www.tpex.org.tw/openapi/v1/tpex_esb_latest_statistics";
 const SOURCE_TPEX_OTC_AFTER_TRADING = "https://www.tpex.org.tw/www/zh-tw/afterTrading/otc";
+const SOURCE_TPEX_EMERGING_DAILY_PRICE = "https://www.tpex.org.tw/openapi/v1/tpex_esb_latest_statistics";
 const SOURCE_TPEX_OTC_DAILY_VALUATION = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis";
 const SOURCE_TWSE_MONTHLY_REVENUE = "https://openapi.twse.com.tw/v1/opendata/t187ap05_L";
 const SOURCE_TPEX_OTC_MONTHLY_REVENUE = "https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap05_O";
 const SOURCE_TPEX_EMERGING_MONTHLY_REVENUE = "https://www.tpex.org.tw/openapi/v1/t187ap05_R";
 const SOURCE_TWSE_INSTITUTIONAL_T86 = "https://www.twse.com.tw/rwd/zh/fund/T86";
 const SOURCE_TWSE_FOREIGN_HOLDING = "https://www.twse.com.tw/rwd/zh/fund/MI_QFIIS";
-const SOURCE_TPEX_INSTITUTIONAL_DAILY = "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade";
+const SOURCE_TPEX_INSTITUTIONAL_DAILY = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading";
+const SOURCE_TPEX_INSTITUTIONAL_LEGACY = "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade";
 const SOURCE_TWSE_TAIEX_HISTORY = "https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_HIST";
 const SOURCE_TWSE_EX_DIVIDEND = "https://www.twse.com.tw/rwd/zh/exRight/TWT49U";
 const SOURCE_TWSE_DISPOSITION = "https://www.twse.com.tw/rwd/zh/announcement/punish?response=json";
+const SOURCE_TWSE_MAJOR_ANNOUNCEMENTS = "https://openapi.twse.com.tw/v1/opendata/t187ap04_L";
 const SOURCE_TPEX_ATTENTION = "https://www.tpex.org.tw/www/zh-tw/bulletin/attention?response=json";
 const SOURCE_MOPS_HOME = "https://mopsov.twse.com.tw/mops/web/index";
 const SOURCE_YAHOO_FINANCE_SEARCH = "https://query1.finance.yahoo.com/v1/finance/search";
@@ -43,7 +45,29 @@ const GLOBAL_INDEX_DEFINITIONS = [
   { symbol: "^N225", label: "日經 225", country: "日本", market: "東京市場" },
   { symbol: "^KS11", label: "KOSPI", country: "韓國", market: "韓國市場" },
 ];
-const PERFORMANCE_ASSET_VERSION = "20260703-21";
+// These are deliberately candidate rules, not automatic public classifications.
+// A matched announcement is kept as evidence and requires an administrator to
+// approve the new theme before it is shown in the public taxonomy.
+const THEME_DISCOVERY_RULES = [
+  { id: "ai-intelligent-computing", theme_name: "AI 智慧運算", keywords: ["人工智慧", "生成式AI", "生成式人工智慧", "AI伺服器", "AI Server", "智慧運算"] },
+  { id: "robotics-automation", theme_name: "機器人與自動化", keywords: ["人形機器人", "機器人", "自動化", "協作機器人", "機器視覺"] },
+  { id: "silicon-photonics", theme_name: "矽光子與 CPO", keywords: ["矽光子", "CPO", "共同封裝光學", "光互連"] },
+  { id: "advanced-packaging", theme_name: "先進封裝與 HBM", keywords: ["先進封裝", "CoWoS", "HBM", "2.5D封裝", "3D封裝"] },
+  { id: "low-orbit-satellite", theme_name: "低軌衛星與太空", keywords: ["低軌衛星", "衛星通訊", "太空", "地面站"] },
+  { id: "defense-drone", theme_name: "國防科技與無人機", keywords: ["無人機", "國防", "軍工", "國防科技", "反無人機"] },
+  { id: "cybersecurity", theme_name: "資安", keywords: ["資訊安全", "資安", "零信任", "資安防護"] },
+  { id: "energy-storage", theme_name: "儲能與氫能", keywords: ["儲能", "氫能", "燃料電池", "固態電池", "電網"] },
+];
+const PERFORMANCE_ASSET_VERSION = "20260903-22";
+const RELEASE_NOTICE = {
+  id: "2026-09-03-d1-read-optimization",
+  title: "網站更新完成",
+  items: [
+    "資料品質頁改為讀取同步摘要，減少重複掃描歷史行情資料。",
+    "新增最新行情、法人、營收與財報的查詢索引，載入會更穩定。",
+    "資料內容與既有功能維持不變；本次更新主要改善速度與使用量。",
+  ],
+};
 const PWA_HEAD = `
   <meta name="theme-color" content="#0d2f58">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -100,7 +124,7 @@ const HOME_CSS = String.raw`
     *{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}main{width:min(1260px,calc(100% - 32px));margin:0 auto;padding-bottom:40px}
     .nav{display:flex;gap:8px;overflow:auto;padding:12px 0}.nav a,.nav button{border:1px solid var(--line);border-radius:6px;padding:9px 12px;background:#fff;text-decoration:none;color:inherit;font:inherit;font-weight:800;white-space:nowrap;cursor:pointer}.nav button{color:#fff;background:var(--green)}.nav button:disabled{cursor:wait;opacity:.65}.nav-account{display:flex;gap:8px;margin-left:auto}.nav-account a:first-child{border-color:rgba(40,109,168,.3);color:var(--blue)}.nav-account a:last-child{border-color:var(--green);color:#fff;background:var(--green)}
     .hero{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:end;padding:30px 0 18px}.eyebrow{margin:0 0 7px;color:var(--green);font-size:.78rem;font-weight:900;text-transform:uppercase;letter-spacing:0}h1{max-width:880px;margin:0 0 12px;font-size:clamp(2rem,4.5vw,4.8rem);line-height:1.04}p{color:var(--muted);line-height:1.75}
-    .panel,.metric,.table-panel,.update{border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.93);box-shadow:var(--shadow)}.update{display:grid;gap:8px;overflow-x:auto;padding:16px}.update small{font-size:.76rem;white-space:nowrap}.grid{display:grid;gap:14px}.grid-2{grid-template-columns:1fr 1fr}.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}.panel{padding:18px}.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.panel-head h2{margin-top:0}.info-dot{position:relative;display:inline-grid;place-items:center;flex:0 0 auto;width:26px;height:26px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--green);font-weight:900;cursor:help}.info-dot:hover::after,.info-dot:focus::after{content:attr(data-tip);position:absolute;right:0;top:32px;z-index:20;width:min(320px,80vw);border:1px solid var(--line);border-radius:6px;padding:10px;background:#fff;color:var(--ink);box-shadow:var(--shadow);font-size:.82rem;line-height:1.55;text-align:left}.metric{min-height:128px;padding:16px}.metric span,.metric small,.muted{color:var(--muted)}.metric strong{display:block;margin:9px 0;font-size:1.3rem}.market-snapshot{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px;margin:0 0 16px}.snapshot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.snapshot-card{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff;text-decoration:none;color:inherit}.snapshot-card span,.snapshot-card small{color:var(--muted)}.snapshot-card strong{font-size:1.04rem;overflow-wrap:anywhere}.global-market{margin:0 0 16px}.global-market-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-top:12px}.global-market-card{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.global-market-card span,.global-market-card small{color:var(--muted)}.global-market-card strong{font-size:1.08rem;overflow-wrap:anywhere}.global-market-card em{font-style:normal;font-size:.82rem;font-weight:900}.global-market-source{margin:10px 0 0;color:var(--muted);font-size:.76rem}.flow-buy-text{color:var(--red);font-weight:900}.flow-sell-text{color:var(--green);font-weight:900}.taiex-card strong{font-size:1.45rem}.server-k-chart{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px}.server-k-chart:focus-visible{outline:2px solid rgba(40,109,168,.35);outline-offset:2px}.chart-value-strip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;color:var(--muted);font-size:.82rem}.chart-value-strip strong{color:var(--ink)}.chart-zoom-controls{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 8px}.chart-zoom-controls span{margin-right:auto;color:var(--muted);font-size:.76rem;font-weight:800}.chart-zoom-controls button{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:6px;padding:0;background:#fff;color:var(--ink);font:inherit;font-size:1rem;font-weight:900;cursor:pointer}.chart-zoom-controls button:hover{border-color:var(--blue);color:var(--blue)}.chart-zoom-controls button:disabled{opacity:.35;cursor:not-allowed}.chart-plot,.market-volume-plot{display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:8px;align-items:stretch}.chart-price-scale{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;min-width:72px;padding:4px 0 22px;pointer-events:none}.chart-price-scale span,.market-volume-scale span{border:1px solid rgba(29,37,43,.1);border-radius:999px;padding:2px 6px;background:rgba(255,255,255,.92);color:var(--ink);font-size:.72rem;font-weight:900;white-space:nowrap}.chart-plot>svg{display:block;width:100%;height:160px;background:#fff;border:1px solid rgba(220,226,220,.8);border-bottom-color:var(--line)}.market-volume-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin:8px 80px 4px 0;color:var(--muted);font-size:.75rem}.market-volume-header strong{color:var(--ink)}.market-volume-plot>svg{display:block;width:100%;height:62px;border-bottom:1px solid var(--line);background:rgba(220,226,220,.12)}.market-volume-scale{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;min-width:72px;padding:0 0 4px;pointer-events:none}.market-volume-plot rect.market-volume.up{fill:rgba(217,74,58,.48);stroke:rgba(217,74,58,.58)}.market-volume-plot rect.market-volume.down{fill:rgba(31,122,90,.48);stroke:rgba(31,122,90,.58)}.server-k-chart line.up,.server-k-chart rect.up{stroke:var(--red);fill:var(--red)}.server-k-chart line.down,.server-k-chart rect.down{stroke:var(--green);fill:var(--green)}
+    .panel,.metric,.table-panel,.update{border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.93);box-shadow:var(--shadow)}.update{display:grid;gap:8px;overflow-x:auto;padding:16px}.update small{font-size:.76rem;white-space:nowrap}.release-notice{width:min(520px,calc(100% - 32px));border:0;border-radius:14px;padding:0;background:var(--panel);color:var(--ink);box-shadow:0 24px 72px rgba(0,0,0,.28)}.release-notice::backdrop{background:rgba(15,31,38,.58)}.release-notice-card{padding:24px}.release-notice-card h2{margin:0}.release-notice-card p{margin:8px 0 14px}.release-notice-card ul{margin:0;padding-left:1.35rem}.release-notice-card li+li{margin-top:8px}.release-notice-card button{display:block;margin:20px 0 0 auto;border:0;border-radius:7px;padding:10px 16px;background:var(--green);color:#fff;font:inherit;font-weight:900;cursor:pointer}.grid{display:grid;gap:14px}.grid-2{grid-template-columns:1fr 1fr}.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}.panel{padding:18px}.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.panel-head h2{margin-top:0}.info-dot{position:relative;display:inline-grid;place-items:center;flex:0 0 auto;width:26px;height:26px;border:1px solid var(--line);border-radius:50%;background:#fff;color:var(--green);font-weight:900;cursor:help}.info-dot:hover::after,.info-dot:focus::after{content:attr(data-tip);position:absolute;right:0;top:32px;z-index:20;width:min(320px,80vw);border:1px solid var(--line);border-radius:6px;padding:10px;background:#fff;color:var(--ink);box-shadow:var(--shadow);font-size:.82rem;line-height:1.55;text-align:left}.metric{min-height:128px;padding:16px}.metric span,.metric small,.muted{color:var(--muted)}.metric strong{display:block;margin:9px 0;font-size:1.3rem}.market-snapshot{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px;margin:0 0 16px}.snapshot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.snapshot-card{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff;text-decoration:none;color:inherit}.snapshot-card span,.snapshot-card small{color:var(--muted)}.snapshot-card strong{font-size:1.04rem;overflow-wrap:anywhere}.global-market{margin:0 0 16px}.global-market-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-top:12px}.global-market-card{display:grid;gap:5px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:12px;background:#fff}.global-market-card span,.global-market-card small{color:var(--muted)}.global-market-card strong{font-size:1.08rem;overflow-wrap:anywhere}.global-market-card em{font-style:normal;font-size:.82rem;font-weight:900}.global-market-source{margin:10px 0 0;color:var(--muted);font-size:.76rem}.flow-buy-text{color:var(--red);font-weight:900}.flow-sell-text{color:var(--green);font-weight:900}.taiex-card strong{font-size:1.45rem}.server-k-chart{border:1px solid var(--line);border-radius:8px;background:#fff;padding:12px}.server-k-chart:focus-visible{outline:2px solid rgba(40,109,168,.35);outline-offset:2px}.chart-value-strip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;color:var(--muted);font-size:.82rem}.chart-value-strip strong{color:var(--ink)}.chart-zoom-controls{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:0 0 8px}.chart-zoom-controls span{margin-right:auto;color:var(--muted);font-size:.76rem;font-weight:800}.chart-zoom-controls button{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:6px;padding:0;background:#fff;color:var(--ink);font:inherit;font-size:1rem;font-weight:900;cursor:pointer}.chart-zoom-controls button:hover{border-color:var(--blue);color:var(--blue)}.chart-zoom-controls button:disabled{opacity:.35;cursor:not-allowed}.chart-plot,.market-volume-plot{display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:8px;align-items:stretch}.chart-price-scale{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;min-width:72px;padding:4px 0 22px;pointer-events:none}.chart-price-scale span,.market-volume-scale span{border:1px solid rgba(29,37,43,.1);border-radius:999px;padding:2px 6px;background:rgba(255,255,255,.92);color:var(--ink);font-size:.72rem;font-weight:900;white-space:nowrap}.chart-plot>svg{display:block;width:100%;height:160px;background:#fff;border:1px solid rgba(220,226,220,.8);border-bottom-color:var(--line)}.market-volume-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin:8px 80px 4px 0;color:var(--muted);font-size:.75rem}.market-volume-header strong{color:var(--ink)}.market-volume-plot>svg{display:block;width:100%;height:62px;border-bottom:1px solid var(--line);background:rgba(220,226,220,.12)}.market-volume-scale{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;min-width:72px;padding:0 0 4px;pointer-events:none}.market-volume-plot rect.market-volume.up{fill:rgba(217,74,58,.48);stroke:rgba(217,74,58,.58)}.market-volume-plot rect.market-volume.down{fill:rgba(31,122,90,.48);stroke:rgba(31,122,90,.58)}.server-k-chart line.up,.server-k-chart rect.up{stroke:var(--red);fill:var(--red)}.server-k-chart line.down,.server-k-chart rect.down{stroke:var(--green);fill:var(--green)}
     .tree,.branch{border:1px solid var(--line);border-radius:8px;background:#fff;margin-bottom:10px;overflow:hidden}.tree summary,.branch summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:13px 14px;font-weight:900}.tree summary small,.branch summary small{color:var(--muted);font-weight:700;text-align:right}.tree-body{padding:10px}.branch{box-shadow:none}.tagline{padding:0 14px 10px}.peer-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 10px 10px}.peer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;border:1px solid var(--line);border-radius:6px;padding:10px;text-decoration:none}.peer small{display:block;color:var(--muted);line-height:1.45}.peer b{color:var(--red);text-align:right}.pager{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:8px 8px 12px}.pager button{border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:#fff;font:inherit;font-weight:900;cursor:pointer;white-space:nowrap}.pager button:disabled{cursor:not-allowed;opacity:.45}.pager span{min-width:0;color:var(--muted);font-size:.82rem;font-weight:900;text-align:center}.theme-industries{display:grid;gap:8px;padding:0 10px 10px}.theme-industry{border:1px solid var(--line);border-radius:6px;background:#fff;overflow:hidden}.theme-industry summary{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 10px;cursor:pointer;list-style:none}.theme-industry summary::-webkit-details-marker{display:none}.theme-industry small{color:var(--muted);text-align:right}
     .recommend-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.recommend-card{display:grid;align-content:start;gap:8px;min-height:170px;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff;text-decoration:none}.recommend-card strong{font-size:1.08rem}.recommend-card p{margin-bottom:0}.label-chip{display:inline-flex;min-height:23px;margin:2px 4px 2px 0;border:1px solid rgba(31,122,90,.24);border-radius:999px;padding:2px 8px;color:var(--green);font-size:.76rem;font-weight:900;background:rgba(31,122,90,.08)}.roster-stock-link{cursor:pointer;text-decoration:none}.roster-stock-link:hover{border-color:var(--green);background:rgba(31,122,90,.16)}
     .quality-warning{grid-column:1/-1;border:1px solid rgba(168,121,26,.28);border-radius:8px;padding:14px;background:#fffaf0}.quality-warning p{margin:6px 0 0}.quality-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.quality-row{min-width:0;border:1px solid var(--line);border-radius:7px;padding:10px;background:#fff}.quality-row span,.quality-row strong,.quality-row small{display:block}.quality-row span{color:var(--muted);font-size:.76rem;font-weight:900}.quality-row strong{margin-top:5px}.quality-row small{margin-top:4px;color:var(--muted)}.quality-summary{display:flex;flex-wrap:wrap;gap:8px}.quality-summary b{border:1px solid var(--line);border-radius:999px;padding:5px 9px;background:#fff;font-size:.78rem}
@@ -1588,6 +1612,72 @@ function jsonWithHeaders(data, headers = {}, status = 200) {
   });
 }
 
+function releaseNoticeHtml() {
+  return `<dialog class="release-notice" data-release-notice data-release-notice-version="${escHtml(RELEASE_NOTICE.id)}" aria-labelledby="release-notice-title">
+  <section class="release-notice-card">
+    <p class="eyebrow">Release note · 2026-09-03</p>
+    <h2 id="release-notice-title">${escHtml(RELEASE_NOTICE.title)}</h2>
+    <p>這個版本首次進入時顯示一次，讓你知道本次調整的內容。</p>
+    <ul>${RELEASE_NOTICE.items.map((item) => `<li>${escHtml(item)}</li>`).join("")}</ul>
+    <button type="button" data-release-notice-close>我知道了</button>
+  </section>
+</dialog>
+<script>
+(() => {
+  const notice = document.querySelector("[data-release-notice]");
+  if (!notice) return;
+  const version = ${JSON.stringify(RELEASE_NOTICE.id)};
+  const storageKey = "twstock-release-notice-version";
+  try {
+    if (localStorage.getItem(storageKey) === version) return;
+    localStorage.setItem(storageKey, version);
+  } catch (_) {
+    // Private browsing may block storage; show the notice instead of hiding it.
+  }
+  if (typeof notice.showModal === "function") notice.showModal();
+  else notice.setAttribute("open", "");
+  notice.querySelector("[data-release-notice-close]")?.addEventListener("click", () => {
+    if (typeof notice.close === "function") notice.close();
+    else notice.removeAttribute("open");
+  });
+})();
+</script>`;
+}
+
+const PUBLIC_PAGE_PATHS = new Set(["/", "/market", "/research", "/taxonomy", "/data", "/guide", "/disclaimer"]);
+
+function isD1DailyReadLimitError(error) {
+  return /D1[\s\S]{0,160}(daily row read limit|free tier daily row read)|daily row read limit|\b7500\b/i.test(
+    error?.stack || error?.message || String(error || ""),
+  );
+}
+
+function d1DailyReadLimitHtml() {
+  return new Response(`<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>台股研究平台｜資料暫時整理中</title><link rel="stylesheet" href="/assets/app.css?v=${PERFORMANCE_ASSET_VERSION}"></head>
+<body><main class="shell"><section class="panel" style="max-width:720px;margin:64px auto;text-align:center">
+<p class="eyebrow">台股研究平台</p><h1>資料庫讀取額度暫時到達上限</h1>
+<p>今天的歷史資料讀取量已超過 Cloudflare D1 免費額度，資料功能會在下一次 UTC 日切換後自動恢復。</p>
+<p>本次程式更新已減少重複掃描，恢復後會以更低的讀取量提供服務。</p>
+<p><a class="button" href="/">重新整理</a></p>
+</section></main>${releaseNoticeHtml()}</body></html>`, {
+    status: 503,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "retry-after": "3600" },
+  });
+}
+
+function d1DailyReadLimitApiResponse() {
+  return jsonWithHeaders(
+    {
+      error: "d1_daily_read_limit",
+      message: "資料庫今日讀取額度已達上限，將在下一個 UTC 日切換後自動恢復。",
+    },
+    { "cache-control": "no-store", "retry-after": "3600" },
+    503,
+  );
+}
+
 function responseWithHeaders(response, additions = {}) {
   const headers = new Headers(response.headers);
   for (const [name, value] of Object.entries(additions)) {
@@ -1639,11 +1729,50 @@ async function cachedResponse(request, ctx, factory, seconds = 300) {
   return response;
 }
 
+const PUBLIC_API_CACHE_PARAMS = {
+  "/api/stocks": ["keyword", "market", "industry", "instrument_type", "theme", "min_price", "max_price", "min_turnover", "min_revenue_yoy", "flow_party", "flow_direction", "institutional_window", "sort", "limit", "offset"],
+  "/api/stocks/suggest": ["q", "limit"],
+  "/api/themes/suggest": ["q", "limit"],
+  "/api/market/index": ["limit"],
+};
+
+function publicApiCacheRequest(request, url, params = []) {
+  const cacheUrl = new URL(url);
+  cacheUrl.search = "";
+  for (const name of params) {
+    const value = url.searchParams.get(name);
+    if (value !== null && value !== "") cacheUrl.searchParams.set(name, value);
+  }
+  return new Request(cacheUrl.toString(), {
+    method: request.method,
+    headers: request.headers,
+  });
+}
+
+function cachedPublicApiResponse(request, ctx, url, factory, params = []) {
+  if (request.method !== "GET") return factory();
+  return cachedResponse(publicApiCacheRequest(request, url, params), ctx, factory, 300);
+}
+
 function isAdminAuthorized(request, env) {
   const expected = String(env.ADMIN_SYNC_TOKEN || "");
   if (!expected) return false;
   const authorization = String(request.headers.get("authorization") || "");
   return authorization === `Bearer ${expected}`;
+}
+
+const TPEX_SYNC_PATHS = new Set([
+  "/api/tpex-sync/daily-price",
+  "/api/tpex-sync/stock-valuation",
+  "/api/tpex-sync/institutional-flow",
+  "/api/tpex-sync/complete",
+]);
+
+function isTpexSyncAuthorized(request, env, url) {
+  if (request.method !== "POST" || !TPEX_SYNC_PATHS.has(url.pathname)) return false;
+  const expected = String(env.TPEX_SYNC_TOKEN || "");
+  if (!expected) return false;
+  return String(request.headers.get("authorization") || "") === `Bearer ${expected}`;
 }
 
 function clientRateLimitKey(request, tier) {
@@ -1668,6 +1797,7 @@ async function enforceApiRateLimit(request, env, url) {
     || url.pathname === "/api/market/global"
     || url.pathname === "/api/market/dashboard"
     || url.pathname === "/api/classifications/quality"
+    || url.pathname === "/api/stocks"
   ) {
     tiers.push(["EXPENSIVE_API_RATE_LIMITER", "expensive"]);
   }
@@ -1805,6 +1935,14 @@ async function fetchOfficialJsonDocument(url) {
   });
   if (!response.ok) throw new Error(`Official JSON document failed ${response.status}: ${url}`);
   return response.json();
+}
+
+async function fetchOfficialJsonWithFallback(url, env) {
+  return fetchOfficialJson(url);
+}
+
+async function fetchOfficialJsonDocumentWithFallback(url, env) {
+  return fetchOfficialJsonDocument(url);
 }
 
 function parseCsvLine(line) {
@@ -2063,16 +2201,13 @@ async function fetchTwseDailyRows() {
   const openApiRows = (await fetchOfficialJson(SOURCE_TWSE_DAILY_PRICE))
     .map(normalizeTwseDailyPrice)
     .filter((row) => row && row.trade_date);
-  const openApiDate = openApiRows.reduce(
-    (latest, row) => (!latest || row.trade_date > latest ? row.trade_date : latest),
-    null,
-  );
+  const rowsByKey = new Map(openApiRows.map((row) => [`${row.stock_code}:${row.trade_date}`, row]));
   for (const date of recentYmdDates(5)) {
     const sourceUrl = `${SOURCE_TWSE_MI_INDEX}?date=${date}&type=ALLBUT0999&response=json`;
     try {
       const doc = await fetchOfficialJsonDocument(sourceUrl);
       const tradeDate = ymdToIso(doc?.date || date);
-      if (!tradeDate || (openApiDate && tradeDate <= openApiDate)) continue;
+      if (!tradeDate) continue;
       const table = (doc?.tables || []).find((item) => {
         const fields = (item?.fields || []).map(normalizeFieldName);
         return fields.includes("證券代號") && fields.includes("收盤價") && Array.isArray(item?.data);
@@ -2080,12 +2215,12 @@ async function fetchTwseDailyRows() {
       const rows = (table?.data || [])
         .map((cells) => normalizeTwseMiIndexDailyRow(cells, tradeDate, sourceUrl))
         .filter(Boolean);
-      if (rows.length) return rows;
+      rows.forEach((row) => rowsByKey.set(`${row.stock_code}:${row.trade_date}`, row));
     } catch (_) {
       // Continue to the next recent date, then fall back to the OpenAPI snapshot.
     }
   }
-  return openApiRows;
+  return [...rowsByKey.values()];
 }
 
 function normalizeTwseDailyValuation(row) {
@@ -2122,7 +2257,7 @@ function normalizeTpexOpenApiValuation(row) {
   };
 }
 
-async function fetchOfficialValuationRows(db) {
+async function fetchOfficialValuationRows(db, env = {}) {
   const rows = [];
   const errors = [];
   try {
@@ -2134,7 +2269,7 @@ async function fetchOfficialValuationRows(db) {
     errors.push({ market_type: "上市", error: String(error?.message || error) });
   }
   try {
-    const tpexRows = (await fetchOfficialJson(SOURCE_TPEX_OTC_DAILY_VALUATION))
+    const tpexRows = (await fetchOfficialJsonWithFallback(SOURCE_TPEX_OTC_DAILY_VALUATION, env))
       .map(normalizeTpexOpenApiValuation)
       .filter((row) => row && row.trade_date);
     rows.push(...tpexRows);
@@ -2197,39 +2332,48 @@ function normalizeTpexOtcDailyPrice(row) {
   };
 }
 
-async function fetchTpexOtcDailyRows() {
-  for (const date of recentRocSlashDates(7)) {
-    const url = `${SOURCE_TPEX_OTC_AFTER_TRADING}?date=${encodeURIComponent(date)}&type=EW&response=json`;
-    const doc = await fetchOfficialJsonDocument(url);
-    const table = doc?.tables?.[0];
-    if (!table || !Array.isArray(table.data) || !table.data.length) continue;
-    const fields = table.fields.map(normalizeFieldName);
-    const tradeDate = rocDateToIso(table.date || date);
-    return table.data.map((cells) => {
-      const row = Object.fromEntries(fields.map((field, index) => [field, cells[index] ?? ""]));
-      const close = toNumber(row["收盤"]);
-      const change = toNumber(row["漲跌"]);
-      const previousClose = close !== null && change !== null ? close - change : null;
-      return {
-        stock_code: row["代號"],
-        stock_name: row["名稱"],
-        market_type: "上櫃",
-        trade_date: tradeDate,
-        open_price: toNumber(row["開盤"]),
-        high_price: toNumber(row["最高"]),
-        low_price: toNumber(row["最低"]),
-        close_price: close,
-        change_price: change,
-        change_percent: previousClose ? (change / previousClose) * 100 : null,
-        volume: toNumber(row["成交股數"]),
-        turnover_value: toNumber(row["成交金額(元)"]),
-        transaction_count: toNumber(row["成交筆數"]),
-        source: "TPEx JSON",
-        source_url: url,
-      };
-    }).filter((row) => isCommonStockCode(row.stock_code) && row.trade_date);
+async function fetchTpexOtcDailyRows(env = {}) {
+  let currentRows = [];
+  let currentError = null;
+  try {
+    currentRows = (await fetchOfficialJsonWithFallback(SOURCE_TPEX_OTC_DAILY_PRICE, env))
+      .map(normalizeTpexOtcDailyPrice)
+      .filter((row) => row && row.trade_date);
+  } catch (error) {
+    // TPEx occasionally redirects Worker traffic to a temporary error page. Keep
+    // fetching the official historical endpoint instead of discarding the run.
+    currentError = error;
   }
-  return [];
+  const rowsByKey = new Map(currentRows.map((row) => [`${row.stock_code}:${row.trade_date}`, row]));
+  for (const date of recentRocSlashDates(5)) {
+    const url = `${SOURCE_TPEX_OTC_AFTER_TRADING}?date=${encodeURIComponent(date)}&type=EW&response=json`;
+    try {
+      const doc = await fetchOfficialJsonDocumentWithFallback(url, env);
+      const table = doc?.tables?.[0];
+      const fields = (table?.fields || []).map(normalizeFieldName);
+      const tradeDate = rocDateToIso(table?.date || date);
+      if (!fields.length || !tradeDate) continue;
+      const rows = (table?.data || []).map((cells) => {
+        const raw = Object.fromEntries(fields.map((field, index) => [field, cells[index] ?? ""]));
+        const close = toNumber(raw["收盤"]);
+        const change = toNumber(raw["漲跌"]);
+        const previousClose = close !== null && change !== null ? close - change : null;
+        return {
+          stock_code: raw["代號"], stock_name: raw["名稱"], market_type: "上櫃", trade_date: tradeDate,
+          open_price: toNumber(raw["開盤"]), high_price: toNumber(raw["最高"]), low_price: toNumber(raw["最低"]),
+          close_price: close, change_price: change, change_percent: previousClose ? (change / previousClose) * 100 : null,
+          volume: toNumber(raw["成交股數"]), turnover_value: toNumber(raw["成交金額(元)"]), transaction_count: toNumber(raw["成交筆數"]),
+          source: "TPEx historical daily close", source_url: url,
+        };
+      }).filter((row) => isCommonStockCode(row.stock_code));
+      rows.forEach((row) => rowsByKey.set(`${row.stock_code}:${row.trade_date}`, row));
+    } catch (_) {
+      // The official historical page is a fallback; the current OpenAPI row still remains usable.
+    }
+  }
+  const result = [...rowsByKey.values()];
+  if (!result.length && currentError) throw currentError;
+  return result;
 }
 
 async function fetchTwseForeignHoldingMap(date) {
@@ -2294,26 +2438,72 @@ async function fetchTwseInstitutionalBatch(options = {}) {
 }
 
 async function fetchTwseInstitutionalRows() {
-  return (await fetchTwseInstitutionalBatch({ tradingDays: 1, lookbackDays: 10 })).rows;
+  return (await fetchTwseInstitutionalBatch({ tradingDays: 5, lookbackDays: 10 })).rows;
 }
 
-async function fetchTpexInstitutionalRows() {
-  for (const date of recentRocSlashDates(7)) {
-    const url = `${SOURCE_TPEX_INSTITUTIONAL_DAILY}?date=${encodeURIComponent(date)}&type=Daily&response=json`;
-    const doc = await fetchOfficialJsonDocument(url);
-    const table = doc?.tables?.[0] || doc?.tables?.find?.((item) => Array.isArray(item?.data) && item.data.length);
-    const rows = Array.isArray(table?.data) ? table.data : [];
-    const tradeDate = rocDateToIso(table?.date || date);
-    if (!rows.length || !tradeDate) continue;
-    return rows
-      .map((cells) => normalizeTpexInstitutionalCells(cells, {
-        tradeDate,
-        source: "TPEx institutional dailyTrade",
-        sourceUrl: url,
-      }))
-      .filter(Boolean);
+function normalizeTpexInstitutionalRow(row) {
+  const stockCode = value(row, ["SecuritiesCompanyCode", "股票代號"]);
+  if (!isCommonStockCode(stockCode)) return null;
+  const sharesToLots = (input) => {
+    const amount = toNumber(input);
+    return amount === null ? null : amount / 1000;
+  };
+  const foreignNetBuy = sharesToLots(value(row, [
+    "ForeignInvestorsIncludeMainlandAreaInvestors-Difference",
+    "ForeignInvestorsInclude MainlandAreaInvestors-Difference",
+    "Foreign Investors include Mainland Area Investors (Foreign Dealers excluded)-Difference",
+  ]));
+  const trustNetBuy = sharesToLots(value(row, ["SecuritiesInvestmentTrustCompanies-Difference"]));
+  const dealerNetBuy = sharesToLots(value(row, ["Dealers-Difference"]));
+  return {
+    stock_code: stockCode,
+    stock_name: value(row, ["CompanyName", "公司名稱"], stockCode),
+    market_type: "上櫃",
+    trade_date: rocDateToIso(value(row, ["Date", "日期"])),
+    foreign_investor_net_buy: foreignNetBuy,
+    investment_trust_net_buy: trustNetBuy,
+    dealer_net_buy: dealerNetBuy,
+    total_institutional_net_buy: sharesToLots(value(row, ["TotalDifference"])) ?? [foreignNetBuy, trustNetBuy, dealerNetBuy].reduce((sum, item) => sum + Number(item || 0), 0),
+    source: "TPEx OpenAPI three institutional daily trading",
+    source_url: SOURCE_TPEX_INSTITUTIONAL_DAILY,
+  };
+}
+
+async function fetchTpexInstitutionalRows(env = {}) {
+  let currentRows = [];
+  let currentError = null;
+  try {
+    currentRows = (await fetchOfficialJsonWithFallback(SOURCE_TPEX_INSTITUTIONAL_DAILY, env))
+      .map(normalizeTpexInstitutionalRow)
+      .filter((row) => row && row.trade_date);
+  } catch (error) {
+    // Continue with the official historical endpoint when the current TPEx API
+    // temporarily redirects a Worker request to an error page.
+    currentError = error;
   }
-  return [];
+  const rowsByKey = new Map(currentRows.map((row) => [`${row.stock_code}:${row.trade_date}`, row]));
+  for (const date of recentRocSlashDates(5)) {
+    const url = `${SOURCE_TPEX_INSTITUTIONAL_LEGACY}?date=${encodeURIComponent(date)}&type=Daily&response=json`;
+    try {
+      const doc = await fetchOfficialJsonDocumentWithFallback(url, env);
+      const table = doc?.tables?.[0] || doc?.tables?.find?.((item) => Array.isArray(item?.data) && item.data.length);
+      const tradeDate = rocDateToIso(table?.date || date);
+      if (!tradeDate) continue;
+      const rows = (table?.data || [])
+        .map((cells) => normalizeTpexInstitutionalCells(cells, {
+          tradeDate,
+          source: "TPEx historical institutional daily trading",
+          sourceUrl: url,
+        }))
+        .filter(Boolean);
+      rows.forEach((row) => rowsByKey.set(`${row.stock_code}:${row.trade_date}`, row));
+    } catch (_) {
+      // Historical fallback failures must not discard the current official OpenAPI snapshot.
+    }
+  }
+  const result = [...rowsByKey.values()];
+  if (!result.length && currentError) throw currentError;
+  return result;
 }
 
 function normalizeTpexEmergingDailyPrice(row) {
@@ -3843,31 +4033,27 @@ async function recomputeAvailableStockScores(db) {
   await db.prepare(`
     with
     latest_price as (
-      select * from (
-        select dp.*,
-          row_number() over (partition by stock_id order by trade_date desc) as row_number
-        from daily_prices dp
-      )
-      where row_number = 1
+      select
+        s.id as stock_id,
+        (select change_percent from daily_prices where stock_id = s.id order by trade_date desc limit 1) as change_percent,
+        (select turnover_value from daily_prices where stock_id = s.id order by trade_date desc limit 1) as turnover_value,
+        (select close_price from daily_prices where stock_id = s.id order by trade_date desc limit 1) as close_price
+      from stocks s
+      where s.instrument_type = 'stock'
     ),
     latest_flow as (
-      select * from (
-        select ifl.*,
-          row_number() over (partition by stock_id order by trade_date desc) as row_number
-        from institutional_flows ifl
-      )
-      where row_number = 1
+      select
+        s.id as stock_id,
+        (select total_institutional_net_buy from institutional_flows where stock_id = s.id order by trade_date desc limit 1) as total_institutional_net_buy
+      from stocks s
+      where s.instrument_type = 'stock'
     ),
     latest_revenue as (
-      select * from (
-        select mr.*,
-          row_number() over (
-            partition by stock_id
-            order by revenue_year desc, revenue_month desc
-          ) as row_number
-        from monthly_revenue mr
-      )
-      where row_number = 1
+      select
+        s.id as stock_id,
+        (select yoy_growth_percent from monthly_revenue where stock_id = s.id order by revenue_year desc, revenue_month desc limit 1) as yoy_growth_percent
+      from stocks s
+      where s.instrument_type = 'stock'
     ),
     latest_theme as (
       select st.stock_id, max(ts.total_theme_score) as theme_score
@@ -4995,7 +5181,6 @@ async function listStatus(db) {
 async function listClassificationQuality(db) {
   const requiredRevenuePeriod = requiredMopsRevenuePeriod();
   const requiredRevenueKey = requiredRevenuePeriod.year * 100 + requiredRevenuePeriod.month;
-  const requiredRevenueDate = `${requiredRevenuePeriod.year}-${String(requiredRevenuePeriod.month).padStart(2, "0")}-01`;
   const [
     stockSummary,
     industryRows,
@@ -5034,62 +5219,40 @@ async function listClassificationQuality(db) {
         count(distinct case when review_status = 'approved' or confidence_score >= ? then stock_id end) as public_stocks
       from stock_themes
     `).bind(PUBLIC_CLASSIFICATION_CONFIDENCE, PUBLIC_CLASSIFICATION_CONFIDENCE - 1, PUBLIC_CLASSIFICATION_CONFIDENCE).first(),
+    // The scheduled import already records these exact values in
+    // data_quality_status. Recomputing them on every public request scanned
+    // the complete price, institutional, and revenue history tables.
     db.prepare(`
-      with
-      price_latest as (
-        select s.market_type, max(dp.trade_date) as latest_data_date
-        from daily_prices dp join stocks s on s.id = dp.stock_id
-        group by s.market_type
-      ),
-      institutional_latest as (
-        select s.market_type, max(ifl.trade_date) as latest_data_date
-        from institutional_flows ifl join stocks s on s.id = ifl.stock_id
-        group by s.market_type
-      ),
-      revenue_latest as (
-        select s.market_type, max(mr.revenue_year * 100 + mr.revenue_month) as latest_period
-        from monthly_revenue mr join stocks s on s.id = mr.stock_id
-        group by s.market_type
+      with ranked as (
+        select dqs.*,
+          row_number() over (
+            partition by data_type, market_scope
+            order by updated_at desc, id desc
+          ) as quality_rank
+        from data_quality_status dqs
       )
-      select 'daily_price' as data_type, s.market_type,
-        count(distinct dp.stock_id) as covered_stocks,
-        count(distinct s.id) as expected_stocks,
-        pl.latest_data_date
-      from stocks s
-      left join price_latest pl on pl.market_type = s.market_type
-      left join daily_prices dp on dp.stock_id = s.id and dp.trade_date = pl.latest_data_date
-      where s.instrument_type in ('stock', 'emerging')
-      group by s.market_type
+      select
+        data_type,
+        market_scope as market_type,
+        covered_stocks,
+        expected_stocks,
+        latest_data_date
+      from ranked
+      where quality_rank = 1
+        and data_type in ('daily_price', 'institutional_flow', 'monthly_revenue')
       union all
-      select 'institutional_flow', s.market_type,
-        count(distinct ifl.stock_id), count(distinct s.id), il.latest_data_date
-      from stocks s
-      left join institutional_latest il on il.market_type = s.market_type
-      left join institutional_flows ifl on ifl.stock_id = s.id and ifl.trade_date = il.latest_data_date
-      where s.instrument_type = 'stock'
-      group by s.market_type
-      union all
-      select 'monthly_revenue', s.market_type,
-        count(distinct mr.stock_id), count(distinct s.id),
-        ? as latest_data_date
-      from stocks s
-      left join monthly_revenue mr on mr.stock_id = s.id
-        and (mr.revenue_year * 100 + mr.revenue_month) = ?
-      where s.instrument_type in ('stock', 'emerging')
-      group by s.market_type
-      union all
-      select 'monthly_revenue_early', s.market_type,
-        count(distinct mr.stock_id), count(distinct s.id),
-        case when rl.latest_period is null then null
-          else printf('%04d-%02d-01', cast(rl.latest_period / 100 as integer), rl.latest_period % 100)
-        end
-      from stocks s
-      join revenue_latest rl on rl.market_type = s.market_type and rl.latest_period > ?
-      left join monthly_revenue mr on mr.stock_id = s.id
-        and (mr.revenue_year * 100 + mr.revenue_month) = rl.latest_period
-      where s.instrument_type in ('stock', 'emerging')
-      group by s.market_type
-    `).bind(requiredRevenueDate, requiredRevenueKey, requiredRevenueKey).all(),
+      select
+        'monthly_revenue_early' as data_type,
+        market_scope as market_type,
+        covered_stocks,
+        expected_stocks,
+        latest_data_date
+      from ranked
+      where quality_rank = 1
+        and data_type = 'monthly_revenue'
+        and cast(replace(substr(latest_data_date, 1, 7), '-', '') as integer) > ?
+      order by data_type, market_type
+    `).bind(requiredRevenueKey).all(),
     db.prepare(`
       select id, data_type, market_scope, source, latest_data_date, status,
         record_count, covered_stocks, expected_stocks, is_demo, note, updated_at
@@ -5105,13 +5268,29 @@ async function listClassificationQuality(db) {
       order by data_type, market_scope
     `).all(),
     db.prepare(`
+      with ranked as (
+        select dqs.*,
+          row_number() over (
+            partition by data_type, market_scope
+            order by updated_at desc, id desc
+          ) as quality_rank
+        from data_quality_status dqs
+      )
       select
-        (select max(trade_date) from daily_prices) as latest_price_date,
-        (select max(trade_date) from institutional_flows) as latest_institutional_date,
-        (select max(score_date) from theme_scores) as latest_theme_score_date,
-        (select max(score_date) from stock_scores) as latest_stock_score_date,
-        (select count(distinct stock_id) from financial_reports) as financial_stock_count,
-        (select count(distinct stock_id) from stock_scores where score_date = (select max(score_date) from stock_scores)) as scored_stock_count
+        coalesce(
+          max(case when data_type = 'daily_price' then latest_data_date end),
+          (select trade_date from daily_prices order by trade_date desc limit 1)
+        ) as latest_price_date,
+        coalesce(
+          max(case when data_type = 'institutional_flow' then latest_data_date end),
+          (select trade_date from institutional_flows order by trade_date desc limit 1)
+        ) as latest_institutional_date,
+        max(case when data_type = 'theme_score' then latest_data_date end) as latest_theme_score_date,
+        max(case when data_type = 'stock_score' then latest_data_date end) as latest_stock_score_date,
+        max(case when data_type = 'financial_report' then covered_stocks end) as financial_stock_count,
+        max(case when data_type = 'stock_score' then covered_stocks end) as scored_stock_count
+      from ranked
+      where quality_rank = 1
     `).first(),
   ]);
   const coverage = (datasetCoverage.results || []).map((row) => ({
@@ -5358,7 +5537,11 @@ async function listOfficialStockHistory(db, stockCode, url) {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (monthCount - 1), 1));
   const from = `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}`;
   const fromDate = `${from}-01`;
-  const stored = await stockSeries(db, stockCode, "daily_prices", "trade_date asc");
+  const { results: stored } = await db.prepare(`
+    select * from daily_prices
+    where stock_id = ? and trade_date >= ?
+    order by trade_date asc
+  `).bind(stock.id, fromDate).all();
   let officialRows = [];
   let errors = [];
   if (stock.market_type === "上市") {
@@ -6251,7 +6434,8 @@ async function ensureIndustry(db, row, now) {
       update industries
       set industry_name = ?, source = ?, source_url = ?, last_updated_at = ?
       where id = ?
-    `).bind(name, row.source || "TWSE OpenAPI", row.source_url || SOURCE_TWSE_STOCK_BASIC, now, existing.id).run();
+        and (industry_name is not ? or source is not ? or source_url is not ?)
+    `).bind(name, row.source || "TWSE OpenAPI", row.source_url || SOURCE_TWSE_STOCK_BASIC, existing.id, name, row.source || "TWSE OpenAPI", row.source_url || SOURCE_TWSE_STOCK_BASIC).run();
     return existing.id;
   }
 
@@ -6289,6 +6473,22 @@ function prepareStockBasicUpsert(db, row, industryId, now) {
       source = excluded.source,
       source_url = excluded.source_url,
       last_updated_at = excluded.last_updated_at
+    where stocks.stock_name is not excluded.stock_name
+      or stocks.industry_code is not excluded.industry_code
+      or stocks.industry_name is not excluded.industry_name
+      or stocks.industry_id is not excluded.industry_id
+      or stocks.instrument_type is not excluded.instrument_type
+      or stocks.company_type is not excluded.company_type
+      or stocks.listing_date is not excluded.listing_date
+      or stocks.established_date is not excluded.established_date
+      or stocks.capital is not excluded.capital
+      or stocks.chairman is not excluded.chairman
+      or stocks.general_manager is not excluded.general_manager
+      or stocks.spokesperson is not excluded.spokesperson
+      or stocks.company_address is not excluded.company_address
+      or stocks.company_url is not excluded.company_url
+      or stocks.source is not excluded.source
+      or stocks.source_url is not excluded.source_url
   `).bind(
     row.stock_code,
     row.stock_name || row.stock_code,
@@ -6335,6 +6535,10 @@ async function importStockBasicRowsBulk(db, payload, rows, now) {
       source = excluded.source,
       source_url = excluded.source_url,
       last_updated_at = excluded.last_updated_at
+    where industries.industry_name is not excluded.industry_name
+      or industries.description is not excluded.description
+      or industries.source is not excluded.source
+      or industries.source_url is not excluded.source_url
   `).bind(
     industry.industry_code,
     industry.industry_name,
@@ -6343,7 +6547,7 @@ async function importStockBasicRowsBulk(db, payload, rows, now) {
     industry.source_url,
     now,
   ));
-  for (const batch of rowChunks(industryStatements, 40)) await db.batch(batch);
+  await runChangedBatches(db, industryStatements, 40);
 
   const industryIdMap = new Map();
   for (const codeChunk of rowChunks([...industriesByCode.keys()], 80)) {
@@ -6360,9 +6564,10 @@ async function importStockBasicRowsBulk(db, payload, rows, now) {
     industryIdMap.get(row.industry_code || "UNKNOWN") || null,
     now,
   ));
-  for (const batch of rowChunks(stockStatements, 40)) await db.batch(batch);
-  const updated = existingStocks.size;
-  const inserted = Math.max(0, validRows.length - updated);
+  const changed = await runChangedBatches(db, stockStatements, 40);
+  const inserted = Math.max(0, validRows.length - existingStocks.size);
+  const updated = Math.max(0, changed - inserted);
+  const unchanged = Math.max(0, validRows.length - changed);
   await updateStatus(
     db,
     "stock_basic",
@@ -6370,10 +6575,10 @@ async function importStockBasicRowsBulk(db, payload, rows, now) {
     now,
     payload.source || "TWSE OpenAPI",
     "success",
-    `Imported stock basic rows: inserted=${inserted}, updated=${updated}, batch=${payload.batch || ""}`,
+    `Imported stock basic rows: inserted=${inserted}, updated=${updated}, unchanged=${unchanged}, batch=${payload.batch || ""}`,
   );
   await writeCrawlerLog(db, "import-stock-basic", payload.source || "TWSE OpenAPI", payload.source_url || SOURCE_TWSE_STOCK_BASIC, now, "success", inserted, updated, null);
-  return { inserted, updated, received: rows.length };
+  return { inserted, updated, changed, unchanged, received: rows.length };
 }
 
 async function importStockBasicRows(db, payload) {
@@ -6382,6 +6587,7 @@ async function importStockBasicRows(db, payload) {
   if (rows.length > 5) return importStockBasicRowsBulk(db, payload, rows, now);
   let inserted = 0;
   let updated = 0;
+  let unchanged = 0;
 
   for (const inputRow of rows) {
     const row = { ...inputRow, ...normalizeOfficialIndustry(inputRow) };
@@ -6389,9 +6595,10 @@ async function importStockBasicRows(db, payload) {
     const marketType = row.market_type || "上市";
     const industryId = await ensureIndustry(db, row, now);
     const existing = await db.prepare("select id from stocks where stock_code = ? and market_type = ?").bind(row.stock_code, marketType).first();
-    await prepareStockBasicUpsert(db, row, industryId, now).run();
-
-    existing ? updated++ : inserted++;
+    const result = await prepareStockBasicUpsert(db, row, industryId, now).run();
+    if (!Number(result?.meta?.changes || 0)) unchanged++;
+    else if (existing) updated++;
+    else inserted++;
   }
 
   await updateStatus(
@@ -6401,16 +6608,25 @@ async function importStockBasicRows(db, payload) {
     now,
     payload.source || "TWSE OpenAPI",
     "success",
-    `Imported stock basic rows: inserted=${inserted}, updated=${updated}, batch=${payload.batch || ""}`,
+    `Imported stock basic rows: inserted=${inserted}, updated=${updated}, unchanged=${unchanged}, batch=${payload.batch || ""}`,
   );
   await writeCrawlerLog(db, "import-stock-basic", payload.source || "TWSE OpenAPI", payload.source_url || SOURCE_TWSE_STOCK_BASIC, now, "success", inserted, updated, null);
-  return { inserted, updated, received: rows.length };
+  return { inserted, updated, changed: inserted + updated, unchanged, received: rows.length };
 }
 
 function rowChunks(rows, size = 75) {
   const result = [];
   for (let index = 0; index < rows.length; index += size) result.push(rows.slice(index, index + size));
   return result;
+}
+
+async function runChangedBatches(db, statements, size = 75) {
+  let changed = 0;
+  for (const batch of rowChunks(statements, size)) {
+    const results = await db.batch(batch);
+    changed += results.reduce((total, result) => total + Number(result?.meta?.changes || 0), 0);
+  }
+  return changed;
 }
 
 async function stockIdMapForRows(db, rows) {
@@ -6467,6 +6683,18 @@ async function importDailyPriceRowsBulk(db, payload, rows, now) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where daily_prices.open_price is not excluded.open_price
+        or daily_prices.high_price is not excluded.high_price
+        or daily_prices.low_price is not excluded.low_price
+        or daily_prices.close_price is not excluded.close_price
+        or daily_prices.change_price is not excluded.change_price
+        or daily_prices.change_percent is not excluded.change_percent
+        or daily_prices.volume is not excluded.volume
+        or daily_prices.turnover_value is not excluded.turnover_value
+        or daily_prices.transaction_count is not excluded.transaction_count
+        or daily_prices.market_type is not excluded.market_type
+        or daily_prices.source is not excluded.source
+        or daily_prices.source_url is not excluded.source_url
     `).bind(
       stockId,
       row.trade_date,
@@ -6486,17 +6714,18 @@ async function importDailyPriceRowsBulk(db, payload, rows, now) {
     ));
   }
 
-  for (const batch of rowChunks(statements, 75)) await db.batch(batch);
-  await updateStatus(db, "daily_price", payload.latest_data_date || latestDate, now, payload.source || "Official OpenAPI", "success", `Imported daily price rows: upserted=${statements.length}, skipped=${skipped}, batch=${payload.batch || ""}`);
+  const changed = await runChangedBatches(db, statements);
+  const unchanged = statements.length - changed;
+  await updateStatus(db, "daily_price", payload.latest_data_date || latestDate, now, payload.source || "Official OpenAPI", "success", `Imported daily price rows: changed=${changed}, unchanged=${unchanged}, skipped=${skipped}, batch=${payload.batch || ""}`);
   await updateImportedMarketQuality(db, {
     dataType: "daily_price",
     rows,
     source: payload.source || rows[0]?.source || "Official OpenAPI",
     latestDataDate: payload.latest_data_date || latestDate,
-    note: `Imported daily price rows: upserted=${statements.length}, skipped=${skipped}, batch=${payload.batch || ""}`,
+    note: `Imported daily price rows: changed=${changed}, unchanged=${unchanged}, skipped=${skipped}, batch=${payload.batch || ""}`,
   });
-  await writeCrawlerLog(db, "import-daily-price", payload.source || "Official OpenAPI", payload.source_url || SOURCE_TWSE_DAILY_PRICE, now, "success", 0, statements.length, null);
-  return { inserted: 0, updated: statements.length, skipped, received: rows.length, latest_data_date: latestDate };
+  await writeCrawlerLog(db, "import-daily-price", payload.source || "Official OpenAPI", payload.source_url || SOURCE_TWSE_DAILY_PRICE, now, "success", 0, changed, null);
+  return { inserted: 0, updated: changed, changed, unchanged, skipped, received: rows.length, latest_data_date: latestDate };
 }
 
 async function importDailyPriceRows(db, payload) {
@@ -6505,6 +6734,7 @@ async function importDailyPriceRows(db, payload) {
   if (rows.length > 80) return importDailyPriceRowsBulk(db, payload, rows, now);
   let inserted = 0;
   let updated = 0;
+  let unchanged = 0;
   let latestDate = null;
 
   for (const row of rows) {
@@ -6535,8 +6765,7 @@ async function importDailyPriceRows(db, payload) {
       stock = await db.prepare("select id from stocks where stock_code = ? and market_type = ?").bind(row.stock_code, marketType).first();
     }
 
-    const existing = await db.prepare("select id from daily_prices where stock_id = ? and trade_date = ?").bind(stock.id, row.trade_date).first();
-    await db.prepare(`
+    const result = await db.prepare(`
       insert into daily_prices (
         stock_id, trade_date, open_price, high_price, low_price, close_price, change_price,
         change_percent, volume, turnover_value, transaction_count, market_type, source, source_url, created_at
@@ -6556,6 +6785,18 @@ async function importDailyPriceRows(db, payload) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where daily_prices.open_price is not excluded.open_price
+        or daily_prices.high_price is not excluded.high_price
+        or daily_prices.low_price is not excluded.low_price
+        or daily_prices.close_price is not excluded.close_price
+        or daily_prices.change_price is not excluded.change_price
+        or daily_prices.change_percent is not excluded.change_percent
+        or daily_prices.volume is not excluded.volume
+        or daily_prices.turnover_value is not excluded.turnover_value
+        or daily_prices.transaction_count is not excluded.transaction_count
+        or daily_prices.market_type is not excluded.market_type
+        or daily_prices.source is not excluded.source
+        or daily_prices.source_url is not excluded.source_url
     `).bind(
       stock.id,
       row.trade_date,
@@ -6574,7 +6815,8 @@ async function importDailyPriceRows(db, payload) {
       now,
     ).run();
 
-    existing ? updated++ : inserted++;
+    if (Number(result?.meta?.changes || 0)) updated++;
+    else unchanged++;
   }
 
   await updateStatus(
@@ -6584,17 +6826,17 @@ async function importDailyPriceRows(db, payload) {
     now,
     payload.source || "TWSE OpenAPI",
     "success",
-    `Imported daily price rows: inserted=${inserted}, updated=${updated}, batch=${payload.batch || ""}`,
+    `Imported daily price rows: inserted=${inserted}, changed=${updated}, unchanged=${unchanged}, batch=${payload.batch || ""}`,
   );
   await updateImportedMarketQuality(db, {
     dataType: "daily_price",
     rows,
     source: payload.source || rows[0]?.source || "Official OpenAPI",
     latestDataDate: payload.latest_data_date || latestDate,
-    note: `Imported daily price rows: inserted=${inserted}, updated=${updated}, batch=${payload.batch || ""}`,
+    note: `Imported daily price rows: inserted=${inserted}, changed=${updated}, unchanged=${unchanged}, batch=${payload.batch || ""}`,
   });
   await writeCrawlerLog(db, "import-daily-price", payload.source || "TWSE OpenAPI", payload.source_url || SOURCE_TWSE_DAILY_PRICE, now, "success", inserted, updated, null);
-  return { inserted, updated, received: rows.length, latest_data_date: latestDate };
+  return { inserted, updated, changed: inserted + updated, unchanged, received: rows.length, latest_data_date: latestDate };
 }
 
 async function importStockValuationRows(db, rows, errors = []) {
@@ -6627,6 +6869,13 @@ async function importStockValuationRows(db, rows, errors = []) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where stock_valuations.pe_ratio is not excluded.pe_ratio
+        or stock_valuations.dividend_yield is not excluded.dividend_yield
+        or stock_valuations.pb_ratio is not excluded.pb_ratio
+        or stock_valuations.fiscal_period is not excluded.fiscal_period
+        or stock_valuations.market_type is not excluded.market_type
+        or stock_valuations.source is not excluded.source
+        or stock_valuations.source_url is not excluded.source_url
     `).bind(
       stockId,
       row.trade_date,
@@ -6640,22 +6889,23 @@ async function importStockValuationRows(db, rows, errors = []) {
       now,
     ));
   }
-  for (const batch of rowChunks(statements, 75)) await db.batch(batch);
+  const changed = await runChangedBatches(db, statements);
+  const unchanged = statements.length - changed;
   const status = errors.length ? "partial" : "success";
-  await updateStatus(db, "stock_valuation", latestDate, now, "TWSE/TPEx official valuation", status, `Imported valuation rows: ${statements.length}; skipped=${skipped}; source_errors=${errors.length}`);
+  await updateStatus(db, "stock_valuation", latestDate, now, "TWSE/TPEx official valuation", status, `Imported valuation rows: changed=${changed}; unchanged=${unchanged}; skipped=${skipped}; source_errors=${errors.length}`);
   await updateQualityStatus(db, {
     dataType: "stock_valuation",
     marketScope: "all",
     source: "TWSE/TPEx official valuation",
     latestDataDate: latestDate,
     status,
-    recordCount: statements.length,
-    coveredStocks: statements.length,
+    recordCount: changed,
+    coveredStocks: changed,
     expectedStocks: await expectedStockCount(db, "all"),
     note: errors.length ? JSON.stringify(errors).slice(0, 800) : "Official daily P/E, yield, and P/B.",
   });
-  await writeCrawlerLog(db, "import-stock-valuation", "TWSE/TPEx official valuation", "", now, status, 0, statements.length, errors.length ? JSON.stringify(errors).slice(0, 1800) : null);
-  return { inserted: 0, updated: statements.length, skipped, received: rows.length, latest_data_date: latestDate, errors };
+  await writeCrawlerLog(db, "import-stock-valuation", "TWSE/TPEx official valuation", "", now, status, 0, changed, errors.length ? JSON.stringify(errors).slice(0, 1800) : null);
+  return { inserted: 0, updated: changed, changed, unchanged, skipped, received: rows.length, latest_data_date: latestDate, errors };
 }
 
 async function importInstitutionalFlowRows(db, payload, rowsInput = null) {
@@ -6693,6 +6943,15 @@ async function importInstitutionalFlowRows(db, payload, rowsInput = null) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where institutional_flows.foreign_investor_net_buy is not excluded.foreign_investor_net_buy
+        or institutional_flows.investment_trust_net_buy is not excluded.investment_trust_net_buy
+        or institutional_flows.dealer_net_buy is not excluded.dealer_net_buy
+        or institutional_flows.total_institutional_net_buy is not excluded.total_institutional_net_buy
+        or institutional_flows.foreign_investor_holding_shares is not coalesce(excluded.foreign_investor_holding_shares, institutional_flows.foreign_investor_holding_shares)
+        or institutional_flows.foreign_investor_holding_percent is not coalesce(excluded.foreign_investor_holding_percent, institutional_flows.foreign_investor_holding_percent)
+        or institutional_flows.issued_shares is not coalesce(excluded.issued_shares, institutional_flows.issued_shares)
+        or institutional_flows.source is not excluded.source
+        or institutional_flows.source_url is not excluded.source_url
     `).bind(
       stockId,
       row.trade_date,
@@ -6709,17 +6968,18 @@ async function importInstitutionalFlowRows(db, payload, rowsInput = null) {
     ));
   }
 
-  for (const batch of rowChunks(statements, 75)) await db.batch(batch);
-  await updateStatus(db, "institutional_flow", payload.latest_data_date || latestDate, now, payload.source || "Official institutional flow", "success", `Imported institutional flow rows: upserted=${statements.length}, skipped=${skipped}, batch=${payload.batch || ""}`);
-  await writeCrawlerLog(db, "import-institutional-flow", payload.source || "Official institutional flow", payload.source_url || "", now, "success", 0, statements.length, null);
+  const changed = await runChangedBatches(db, statements);
+  const unchanged = statements.length - changed;
+  await updateStatus(db, "institutional_flow", payload.latest_data_date || latestDate, now, payload.source || "Official institutional flow", "success", `Imported institutional flow rows: changed=${changed}, unchanged=${unchanged}, skipped=${skipped}, batch=${payload.batch || ""}`);
+  await writeCrawlerLog(db, "import-institutional-flow", payload.source || "Official institutional flow", payload.source_url || "", now, "success", 0, changed, null);
   await updateImportedMarketQuality(db, {
     dataType: "institutional_flow",
     rows: rows.map((row) => ({ ...row, market_type: row.market_type || "上市" })),
     source: payload.source || rows[0]?.source || "Official institutional flow",
     latestDataDate: payload.latest_data_date || latestDate,
-    note: `Imported institutional flow rows: upserted=${statements.length}, skipped=${skipped}, batch=${payload.batch || ""}`,
+    note: `Imported institutional flow rows: changed=${changed}, unchanged=${unchanged}, skipped=${skipped}, batch=${payload.batch || ""}`,
   });
-  return { inserted: 0, updated: statements.length, skipped, received: rows.length, latest_data_date: latestDate };
+  return { inserted: 0, updated: changed, changed, unchanged, skipped, received: rows.length, latest_data_date: latestDate };
 }
 
 async function importMarketIndexRows(db, payload, rowsInput = null) {
@@ -6745,6 +7005,13 @@ async function importMarketIndexRows(db, payload, rowsInput = null) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where market_index_prices.index_name is not excluded.index_name
+        or market_index_prices.open_index is not excluded.open_index
+        or market_index_prices.high_index is not excluded.high_index
+        or market_index_prices.low_index is not excluded.low_index
+        or market_index_prices.close_index is not excluded.close_index
+        or market_index_prices.source is not excluded.source
+        or market_index_prices.source_url is not excluded.source_url
     `).bind(
       row.index_code,
       row.index_name || row.index_code,
@@ -6758,10 +7025,11 @@ async function importMarketIndexRows(db, payload, rowsInput = null) {
       now,
     ));
   }
-  for (const batch of rowChunks(statements, 75)) await db.batch(batch);
-  await updateStatus(db, "market_index", payload.latest_data_date || latestDate, now, payload.source || "TWSE index", "success", `Imported market index rows: upserted=${statements.length}, batch=${payload.batch || ""}`);
-  await writeCrawlerLog(db, "import-market-index", payload.source || "TWSE index", payload.source_url || "", now, "success", 0, statements.length, null);
-  return { inserted: 0, updated: statements.length, received: rows.length, latest_data_date: latestDate };
+  const changed = await runChangedBatches(db, statements);
+  const unchanged = statements.length - changed;
+  await updateStatus(db, "market_index", payload.latest_data_date || latestDate, now, payload.source || "TWSE index", "success", `Imported market index rows: changed=${changed}, unchanged=${unchanged}, batch=${payload.batch || ""}`);
+  await writeCrawlerLog(db, "import-market-index", payload.source || "TWSE index", payload.source_url || "", now, "success", 0, changed, null);
+  return { inserted: 0, updated: changed, changed, unchanged, received: rows.length, latest_data_date: latestDate };
 }
 
 async function importDividendRows(db, payload, rowsInput = null) {
@@ -6796,6 +7064,14 @@ async function importDividendRows(db, payload, rowsInput = null) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where stock_dividends.stock_code is not excluded.stock_code
+        or stock_dividends.stock_name is not excluded.stock_name
+        or stock_dividends.market_type is not excluded.market_type
+        or stock_dividends.before_close is not excluded.before_close
+        or stock_dividends.reference_price is not excluded.reference_price
+        or stock_dividends.dividend_value is not excluded.dividend_value
+        or stock_dividends.source is not excluded.source
+        or stock_dividends.source_url is not excluded.source_url
     `).bind(
       stockId,
       row.stock_code,
@@ -6811,10 +7087,11 @@ async function importDividendRows(db, payload, rowsInput = null) {
       now,
     ));
   }
-  for (const batch of rowChunks(statements, 75)) await db.batch(batch);
-  await updateStatus(db, "dividend_calendar", payload.latest_data_date || latestDate, now, payload.source || "TWSE dividend", "success", `Imported dividend rows: upserted=${statements.length}, skipped=${skipped}, batch=${payload.batch || ""}`);
-  await writeCrawlerLog(db, "import-dividend-calendar", payload.source || "TWSE dividend", payload.source_url || "", now, "success", 0, statements.length, null);
-  return { inserted: 0, updated: statements.length, skipped, received: rows.length, latest_data_date: latestDate };
+  const changed = await runChangedBatches(db, statements);
+  const unchanged = statements.length - changed;
+  await updateStatus(db, "dividend_calendar", payload.latest_data_date || latestDate, now, payload.source || "TWSE dividend", "success", `Imported dividend rows: changed=${changed}, unchanged=${unchanged}, skipped=${skipped}, batch=${payload.batch || ""}`);
+  await writeCrawlerLog(db, "import-dividend-calendar", payload.source || "TWSE dividend", payload.source_url || "", now, "success", 0, changed, null);
+  return { inserted: 0, updated: changed, changed, unchanged, skipped, received: rows.length, latest_data_date: latestDate };
 }
 
 async function importMonthlyRevenueRowsBulk(db, payload, rows, now) {
@@ -6853,6 +7130,17 @@ async function importMonthlyRevenueRowsBulk(db, payload, rows, now) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where monthly_revenue.report_date is not excluded.report_date
+        or monthly_revenue.monthly_revenue is not excluded.monthly_revenue
+        or monthly_revenue.last_month_revenue is not excluded.last_month_revenue
+        or monthly_revenue.last_year_revenue is not excluded.last_year_revenue
+        or monthly_revenue.mom_growth_percent is not excluded.mom_growth_percent
+        or monthly_revenue.yoy_growth_percent is not excluded.yoy_growth_percent
+        or monthly_revenue.cumulative_revenue is not excluded.cumulative_revenue
+        or monthly_revenue.cumulative_yoy_growth_percent is not excluded.cumulative_yoy_growth_percent
+        or monthly_revenue.note is not excluded.note
+        or monthly_revenue.source is not excluded.source
+        or monthly_revenue.source_url is not excluded.source_url
     `).bind(
       stockId,
       Number(row.revenue_year),
@@ -6872,10 +7160,11 @@ async function importMonthlyRevenueRowsBulk(db, payload, rows, now) {
     ));
   }
 
-  for (const batch of rowChunks(statements, 75)) await db.batch(batch);
-  await updateStatus(db, "monthly_revenue", payload.latest_data_date || latestPeriod, now, payload.source || "Official OpenAPI", "success", `Imported monthly revenue rows: upserted=${statements.length}, skipped=${skipped}, batch=${payload.batch || ""}`);
-  await writeCrawlerLog(db, "import-monthly-revenue", payload.source || "Official OpenAPI", payload.source_url || "", now, "success", 0, statements.length, null);
-  return { inserted: 0, updated: statements.length, skipped, received: rows.length, latest_data_date: latestPeriod };
+  const changed = await runChangedBatches(db, statements);
+  const unchanged = statements.length - changed;
+  await updateStatus(db, "monthly_revenue", payload.latest_data_date || latestPeriod, now, payload.source || "Official OpenAPI", "success", `Imported monthly revenue rows: changed=${changed}, unchanged=${unchanged}, skipped=${skipped}, batch=${payload.batch || ""}`);
+  await writeCrawlerLog(db, "import-monthly-revenue", payload.source || "Official OpenAPI", payload.source_url || "", now, "success", 0, changed, null);
+  return { inserted: 0, updated: changed, changed, unchanged, skipped, received: rows.length, latest_data_date: latestPeriod };
 }
 
 async function importMonthlyRevenueRows(db, payload) {
@@ -6884,6 +7173,7 @@ async function importMonthlyRevenueRows(db, payload) {
   if (rows.length > 80) return importMonthlyRevenueRowsBulk(db, payload, rows, now);
   let inserted = 0;
   let updated = 0;
+  let unchanged = 0;
   let latestPeriod = null;
 
   for (const row of rows) {
@@ -6903,8 +7193,7 @@ async function importMonthlyRevenueRows(db, payload) {
       stock = await db.prepare("select id from stocks where stock_code = ? and market_type = ?").bind(row.stock_code, marketType).first();
     }
 
-    const existing = await db.prepare("select id from monthly_revenue where stock_id = ? and revenue_year = ? and revenue_month = ?").bind(stock.id, row.revenue_year, row.revenue_month).first();
-    await db.prepare(`
+    const result = await db.prepare(`
       insert into monthly_revenue (
         stock_id, revenue_year, revenue_month, report_date, monthly_revenue, last_month_revenue,
         last_year_revenue, mom_growth_percent, yoy_growth_percent, cumulative_revenue,
@@ -6924,6 +7213,17 @@ async function importMonthlyRevenueRows(db, payload) {
         source = excluded.source,
         source_url = excluded.source_url,
         created_at = excluded.created_at
+      where monthly_revenue.report_date is not excluded.report_date
+        or monthly_revenue.monthly_revenue is not excluded.monthly_revenue
+        or monthly_revenue.last_month_revenue is not excluded.last_month_revenue
+        or monthly_revenue.last_year_revenue is not excluded.last_year_revenue
+        or monthly_revenue.mom_growth_percent is not excluded.mom_growth_percent
+        or monthly_revenue.yoy_growth_percent is not excluded.yoy_growth_percent
+        or monthly_revenue.cumulative_revenue is not excluded.cumulative_revenue
+        or monthly_revenue.cumulative_yoy_growth_percent is not excluded.cumulative_yoy_growth_percent
+        or monthly_revenue.note is not excluded.note
+        or monthly_revenue.source is not excluded.source
+        or monthly_revenue.source_url is not excluded.source_url
     `).bind(
       stock.id,
       Number(row.revenue_year),
@@ -6942,7 +7242,8 @@ async function importMonthlyRevenueRows(db, payload) {
       now,
     ).run();
 
-    existing ? updated++ : inserted++;
+    if (Number(result?.meta?.changes || 0)) updated++;
+    else unchanged++;
   }
 
   await updateStatus(
@@ -6952,10 +7253,10 @@ async function importMonthlyRevenueRows(db, payload) {
     now,
     payload.source || "Official OpenAPI",
     "success",
-    `Imported monthly revenue rows: inserted=${inserted}, updated=${updated}, batch=${payload.batch || ""}`,
+    `Imported monthly revenue rows: inserted=${inserted}, changed=${updated}, unchanged=${unchanged}, batch=${payload.batch || ""}`,
   );
   await writeCrawlerLog(db, "import-monthly-revenue", payload.source || "Official OpenAPI", payload.source_url || "", now, "success", inserted, updated, null);
-  return { inserted, updated, received: rows.length, latest_data_date: latestPeriod };
+  return { inserted, updated, changed: inserted + updated, unchanged, received: rows.length, latest_data_date: latestPeriod };
 }
 
 async function ensureTheme(db, theme, now) {
@@ -7149,7 +7450,7 @@ async function importThemeTagRows(db, payload) {
   return { themes: themesUpserted, links: linksUpserted, roles: rolesInserted, scores: scoresUpserted };
 }
 
-async function syncOfficialStockBasic(db) {
+async function syncOfficialStockBasic(db, env = {}) {
   const jobs = [
     ["twse_stock_basic", SOURCE_TWSE_STOCK_BASIC, normalizeTwseStockBasic, "TWSE OpenAPI", "上市"],
     ["tpex_otc_stock_basic", SOURCE_TPEX_OTC_STOCK_BASIC, (row) => normalizeTpexStockBasic(row, "上櫃", SOURCE_TPEX_OTC_STOCK_BASIC), "TPEx OpenAPI", "上櫃"],
@@ -7158,7 +7459,7 @@ async function syncOfficialStockBasic(db) {
   const summary = {};
   for (const [name, url, normalizer, source, marketType] of jobs) {
     try {
-      const raw = await fetchOfficialJson(url);
+      const raw = await fetchOfficialJsonWithFallback(url, env);
       const rows = raw.map(normalizer).filter(Boolean);
       const latestDataDate = new Date().toISOString().slice(0, 10);
       summary[name] = await importStockBasicRows(db, {
@@ -7193,7 +7494,7 @@ async function syncOfficialStockBasic(db) {
   return summary;
 }
 
-async function syncOfficialDailyPrice(db, payload = {}) {
+async function syncOfficialDailyPrice(db, payload = {}, env = {}) {
   const jobs = [
     {
       name: "twse_daily_price",
@@ -7205,16 +7506,16 @@ async function syncOfficialDailyPrice(db, payload = {}) {
     {
       name: "tpex_otc_daily_price",
       marketType: "上櫃",
-      source: "TPEx JSON",
-      sourceUrl: SOURCE_TPEX_OTC_AFTER_TRADING,
-      load: fetchTpexOtcDailyRows,
+      source: "TPEx OpenAPI daily close",
+      sourceUrl: SOURCE_TPEX_OTC_DAILY_PRICE,
+      load: () => fetchTpexOtcDailyRows(env),
     },
     {
       name: "tpex_emerging_daily_price",
       marketType: "興櫃",
       source: "TPEx OpenAPI",
       sourceUrl: SOURCE_TPEX_EMERGING_DAILY_PRICE,
-      load: async () => (await fetchOfficialJson(SOURCE_TPEX_EMERGING_DAILY_PRICE)).map(normalizeTpexEmergingDailyPrice).filter((row) => row && row.trade_date),
+      load: async () => (await fetchOfficialJsonWithFallback(SOURCE_TPEX_EMERGING_DAILY_PRICE, env)).map(normalizeTpexEmergingDailyPrice).filter((row) => row && row.trade_date),
     },
   ].filter((job) => payload.skip_tpex !== true || !job.name.startsWith("tpex_"));
   const summary = {};
@@ -7229,17 +7530,19 @@ async function syncOfficialDailyPrice(db, payload = {}) {
         latest_data_date: latestDataDate,
         batch: "worker-official-sync",
       });
-      await updateQualityStatus(db, {
-        dataType: "daily_price",
-        marketScope: job.marketType,
-        source: job.source,
-        latestDataDate,
-        status: rows.length ? "success" : "partial",
-        recordCount: rows.length,
-        coveredStocks: new Set(rows.map((row) => row.stock_code)).size,
-        expectedStocks: await expectedStockCount(db, job.marketType),
-        note: rows.length ? null : "Official source returned no rows.",
-      });
+      if (Number(summary[job.name]?.changed || 0) > 0) {
+        await updateQualityStatus(db, {
+          dataType: "daily_price",
+          marketScope: job.marketType,
+          source: job.source,
+          latestDataDate,
+          status: rows.length ? "success" : "partial",
+          recordCount: rows.length,
+          coveredStocks: new Set(rows.map((row) => row.stock_code)).size,
+          expectedStocks: await expectedStockCount(db, job.marketType),
+          note: rows.length ? null : "Official source returned no rows.",
+        });
+      }
     } catch (error) {
       summary[job.name] = { error: String(error && error.message ? error.message : error), source_url: job.sourceUrl };
       await updateQualityStatus(db, {
@@ -7277,17 +7580,19 @@ async function syncOfficialMonthlyRevenue(db) {
         latest_data_date: latestDataDate,
         batch: "worker-official-sync",
       });
-      await updateQualityStatus(db, {
-        dataType: "monthly_revenue",
-        marketScope: marketType,
-        source,
-        latestDataDate,
-        status: rows.length ? "success" : "partial",
-        recordCount: rows.length,
-        coveredStocks: new Set(rows.map((row) => row.stock_code)).size,
-        expectedStocks: await expectedStockCount(db, marketType),
-        note: rows.length ? null : "Official source returned no rows.",
-      });
+      if (Number(summary[name]?.changed || 0) > 0) {
+        await updateQualityStatus(db, {
+          dataType: "monthly_revenue",
+          marketScope: marketType,
+          source,
+          latestDataDate,
+          status: rows.length ? "success" : "partial",
+          recordCount: rows.length,
+          coveredStocks: new Set(rows.map((row) => row.stock_code)).size,
+          expectedStocks: await expectedStockCount(db, marketType),
+          note: rows.length ? null : "Official source returned no rows.",
+        });
+      }
     } catch (error) {
       summary[name] = { error: String(error && error.message ? error.message : error), source_url: url };
       await updateQualityStatus(db, {
@@ -7355,10 +7660,10 @@ async function syncOfficialMonthlyRevenueHistoryBatch(db, payload = {}) {
   };
 }
 
-async function syncOfficialInstitutionalFlows(db, payload = {}) {
+async function syncOfficialInstitutionalFlows(db, payload = {}, env = {}) {
   const jobs = [
     ["twse_institutional_flow", fetchTwseInstitutionalRows, "TWSE T86", SOURCE_TWSE_INSTITUTIONAL_T86, "上市"],
-    ["tpex_institutional_flow", fetchTpexInstitutionalRows, "TPEx institutional dailyTrade", SOURCE_TPEX_INSTITUTIONAL_DAILY, "上櫃"],
+    ["tpex_institutional_flow", () => fetchTpexInstitutionalRows(env), "TPEx institutional dailyTrade", SOURCE_TPEX_INSTITUTIONAL_DAILY, "上櫃"],
   ].filter(([name]) => payload.skip_tpex !== true || !name.startsWith("tpex_"));
   const summary = {};
   for (const [name, load, source, sourceUrl, marketType] of jobs) {
@@ -7372,17 +7677,19 @@ async function syncOfficialInstitutionalFlows(db, payload = {}) {
         latest_data_date: latestDataDate,
         batch: "worker-official-sync",
       });
-      await updateQualityStatus(db, {
-        dataType: "institutional_flow",
-        marketScope: marketType,
-        source,
-        latestDataDate,
-        status: rows.length ? "success" : "partial",
-        recordCount: rows.length,
-        coveredStocks: new Set(rows.map((row) => row.stock_code)).size,
-        expectedStocks: await expectedStockCount(db, marketType),
-        note: rows.length ? null : "Official source returned no rows.",
-      });
+      if (Number(summary[name]?.changed || 0) > 0) {
+        await updateQualityStatus(db, {
+          dataType: "institutional_flow",
+          marketScope: marketType,
+          source,
+          latestDataDate,
+          status: rows.length ? "success" : "partial",
+          recordCount: rows.length,
+          coveredStocks: new Set(rows.map((row) => row.stock_code)).size,
+          expectedStocks: await expectedStockCount(db, marketType),
+          note: rows.length ? null : "Official source returned no rows.",
+        });
+      }
     } catch (error) {
       summary[name] = { error: String(error && error.message ? error.message : error), source_url: sourceUrl };
       await updateQualityStatus(db, {
@@ -7458,27 +7765,193 @@ async function syncOfficialDividendCalendar(db) {
   });
 }
 
-async function syncOfficialStockValuations(db) {
-  const { rows, errors } = await fetchOfficialValuationRows(db);
+async function syncOfficialStockValuations(db, env = {}) {
+  const { rows, errors } = await fetchOfficialValuationRows(db, env);
   return importStockValuationRows(db, rows, errors);
 }
 
-async function syncOfficialMarketData(db, payload = {}) {
+function themeCandidateKey(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\s\-_/]+/g, "")
+    .replace(/[()（）]/g, "");
+}
+
+function officialAnnouncementText(row) {
+  return [
+    value(row, ["主旨 ", "主旨", "Subject", "Title"]),
+    value(row, ["說明", "Description", "Content"]),
+  ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+}
+
+function officialAnnouncementDate(row) {
+  return rocDateToIso(value(row, ["發言日期", "出表日期", "Date", "ReportDate"]));
+}
+
+async function syncOfficialThemeCandidates(db) {
   const startedAt = new Date().toISOString();
-  const requestedTasks = Array.isArray(payload.tasks) && payload.tasks.length ? payload.tasks : ["daily-price", "stock-valuation", "monthly-revenue", "institutional-flow", "market-index", "dividend"];
+  const rawRows = await fetchOfficialJson(SOURCE_TWSE_MAJOR_ANNOUNCEMENTS);
+  const recentAfter = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const { results: knownThemes = [] } = await db.prepare("select theme_name from themes").all();
+  const knownThemeKeys = new Set(knownThemes.map((row) => themeCandidateKey(row.theme_name)));
+  const candidates = new Map();
+
+  for (const row of rawRows) {
+    const stockCode = String(value(row, ["公司代號", "公司代碼", "CompanyCode"]) || "").trim();
+    const stockName = String(value(row, ["公司名稱", "CompanyName"]) || "").trim();
+    const announcementDate = officialAnnouncementDate(row);
+    const text = officialAnnouncementText(row);
+    if (!isCommonStockCode(stockCode) || !announcementDate || announcementDate < recentAfter || !text) continue;
+    const searchable = text.toLowerCase();
+    for (const rule of THEME_DISCOVERY_RULES) {
+      if (knownThemeKeys.has(themeCandidateKey(rule.theme_name))) continue;
+      const matchedKeywords = rule.keywords.filter((keyword) => searchable.includes(keyword.toLowerCase()));
+      if (!matchedKeywords.length) continue;
+      if (!candidates.has(rule.id)) candidates.set(rule.id, { rule, evidence: [] });
+      const bucket = candidates.get(rule.id);
+      bucket.evidence.push({
+        stock_code: stockCode,
+        stock_name: stockName,
+        announcement_date: announcementDate,
+        headline: String(value(row, ["主旨 ", "主旨", "Subject", "Title"]) || text).slice(0, 500),
+        body_excerpt: text.slice(0, 1200),
+        matched_keywords: matchedKeywords.join("、"),
+      });
+    }
+  }
+
+  let candidatesCreated = 0;
+  let evidenceInserted = 0;
+  let evidenceUnchanged = 0;
+  const candidateSummary = [];
+  for (const [candidateKey, bucket] of candidates) {
+    const now = new Date().toISOString();
+    const stockCount = new Set(bucket.evidence.map((row) => row.stock_code)).size;
+    const confidence = Math.min(95, 45 + stockCount * 12 + Math.min(bucket.evidence.length, 5) * 5);
+    const existing = await db.prepare("select id, status from theme_candidates where candidate_key = ?").bind(candidateKey).first();
+    await db.prepare(`
+      insert into theme_candidates (
+        candidate_key, theme_name, status, confidence_score, first_seen_at, last_seen_at,
+        source_count, stock_count, source, evidence_url, rationale, created_at, updated_at
+      ) values (?, ?, 'pending', ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)
+      on conflict(candidate_key) do update set
+        last_seen_at = excluded.last_seen_at,
+        confidence_score = max(theme_candidates.confidence_score, excluded.confidence_score),
+        updated_at = excluded.updated_at
+    `).bind(
+      candidateKey,
+      bucket.rule.theme_name,
+      confidence,
+      now,
+      now,
+      "TWSE daily major announcements",
+      SOURCE_TWSE_MAJOR_ANNOUNCEMENTS,
+      `Matched official disclosure keywords: ${bucket.rule.keywords.join("、")}`,
+      now,
+      now,
+    ).run();
+    if (!existing) candidatesCreated++;
+    const candidate = await db.prepare("select id, status from theme_candidates where candidate_key = ?").bind(candidateKey).first();
+    if (!candidate) continue;
+    for (const evidence of bucket.evidence) {
+      const sourceKey = `${candidateKey}:${evidence.stock_code}:${evidence.announcement_date}:${evidence.headline}`;
+      const result = await db.prepare(`
+        insert into theme_candidate_evidence (
+          candidate_id, stock_code, stock_name, announcement_date, headline, body_excerpt,
+          matched_keywords, source_url, source_key, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(source_key) do nothing
+      `).bind(
+        candidate.id,
+        evidence.stock_code,
+        evidence.stock_name || null,
+        evidence.announcement_date,
+        evidence.headline,
+        evidence.body_excerpt,
+        evidence.matched_keywords,
+        SOURCE_TWSE_MAJOR_ANNOUNCEMENTS,
+        sourceKey,
+        now,
+      ).run();
+      if (Number(result.meta?.changes || 0)) evidenceInserted++;
+      else evidenceUnchanged++;
+    }
+    await db.prepare(`
+      update theme_candidates
+      set source_count = (select count(*) from theme_candidate_evidence where candidate_id = ?),
+          stock_count = (select count(distinct stock_code) from theme_candidate_evidence where candidate_id = ?),
+          updated_at = ?
+      where id = ?
+    `).bind(candidate.id, candidate.id, now, candidate.id).run();
+    candidateSummary.push({ candidate_key: candidateKey, status: candidate.status, matched_stocks: stockCount });
+  }
+  await writeCrawlerLog(
+    db,
+    "official-theme-candidate-sync",
+    "TWSE daily major announcements",
+    SOURCE_TWSE_MAJOR_ANNOUNCEMENTS,
+    startedAt,
+    "success",
+    evidenceInserted,
+    candidatesCreated,
+    null,
+  );
+  return {
+    received: rawRows.length,
+    inserted: evidenceInserted,
+    changed: candidatesCreated + evidenceInserted,
+    unchanged: evidenceUnchanged,
+    skipped: Math.max(0, rawRows.length - [...candidates.values()].reduce((total, bucket) => total + bucket.evidence.length, 0)),
+    candidates_created: candidatesCreated,
+    candidates: candidateSummary,
+  };
+}
+
+function collectImportMetrics(value) {
+  const metrics = { received: 0, inserted: 0, changed: 0, unchanged: 0, skipped: 0 };
+  const visit = (item) => {
+    if (!item || typeof item !== "object") return;
+    if (Object.prototype.hasOwnProperty.call(item, "received")) {
+      const inserted = Number(item.inserted || 0);
+      const updated = Number(item.updated || 0);
+      metrics.received += Number(item.received || 0);
+      metrics.inserted += inserted;
+      metrics.changed += Number(item.changed ?? (inserted + updated));
+      metrics.unchanged += Number(item.unchanged || 0);
+      metrics.skipped += Number(item.skipped || 0);
+      return;
+    }
+    Object.values(item).forEach(visit);
+  };
+  visit(value);
+  return metrics;
+}
+
+async function syncOfficialMarketData(db, payload = {}, env = {}) {
+  const startedAt = new Date().toISOString();
+  const requestedTasks = Array.isArray(payload.tasks) && payload.tasks.length ? payload.tasks : ["daily-price", "stock-valuation", "monthly-revenue", "institutional-flow", "market-index", "dividend", "theme-candidates"];
   const tasks = new Set(requestedTasks);
   const summary = {};
   try {
-    if (tasks.has("stock-basic") || tasks.has("all")) summary.stock_basic = await syncOfficialStockBasic(db);
-    if (tasks.has("daily-price") || tasks.has("all")) summary.daily_price = await syncOfficialDailyPrice(db, payload);
-    if (tasks.has("stock-valuation") || tasks.has("all")) summary.stock_valuation = await syncOfficialStockValuations(db);
+    if (tasks.has("stock-basic") || tasks.has("all")) summary.stock_basic = await syncOfficialStockBasic(db, env);
+    if (tasks.has("daily-price") || tasks.has("all")) summary.daily_price = await syncOfficialDailyPrice(db, payload, env);
+    if (tasks.has("stock-valuation") || tasks.has("all")) summary.stock_valuation = await syncOfficialStockValuations(db, env);
     if (tasks.has("monthly-revenue") || tasks.has("all")) summary.monthly_revenue = await syncOfficialMonthlyRevenue(db);
-    if (tasks.has("institutional-flow") || tasks.has("all")) summary.institutional_flow = await syncOfficialInstitutionalFlows(db, payload);
+    if (tasks.has("institutional-flow") || tasks.has("all")) summary.institutional_flow = await syncOfficialInstitutionalFlows(db, payload, env);
     if (tasks.has("market-index") || tasks.has("all")) summary.market_index = await syncOfficialMarketIndex(db, { months: payload.index_months || 12 });
     if (tasks.has("dividend") || tasks.has("all")) summary.dividend_calendar = await syncOfficialDividendCalendar(db);
-    if (payload.recompute_scores === true || ["daily-price", "monthly-revenue", "institutional-flow", "all"].some((task) => tasks.has(task))) {
+    if (tasks.has("theme-candidates") || tasks.has("all")) summary.theme_candidates = await syncOfficialThemeCandidates(db);
+    const sourceMetrics = Object.fromEntries(
+      Object.entries(summary).map(([name, value]) => [name, collectImportMetrics(value)]),
+    );
+    const scoringInputChanged = ["daily_price", "monthly_revenue", "institutional_flow"]
+      .some((name) => Number(sourceMetrics[name]?.changed || 0) > 0);
+    const scoringRequested = payload.recompute_scores === true || ["daily-price", "monthly-revenue", "institutional-flow", "all"].some((task) => tasks.has(task));
+    if (scoringRequested && scoringInputChanged) {
       summary.theme_score = await recomputeVerifiedThemeScores(db);
       summary.stock_score = await recomputeAvailableStockScores(db);
+    } else if (scoringRequested) {
+      summary.score_recompute = { status: "skipped", reason: "source data unchanged" };
     }
     const sourceErrors = [];
     const collectErrors = (value, path = []) => {
@@ -7491,6 +7964,20 @@ async function syncOfficialMarketData(db, payload = {}) {
     };
     collectErrors(summary);
     const overallStatus = sourceErrors.length ? "partial" : "success";
+    const totalMetrics = Object.values(sourceMetrics).reduce((total, item) => ({
+      received: total.received + item.received,
+      inserted: total.inserted + item.inserted,
+      changed: total.changed + item.changed,
+      unchanged: total.unchanged + item.unchanged,
+      skipped: total.skipped + item.skipped,
+    }), { received: 0, inserted: 0, changed: 0, unchanged: 0, skipped: 0 });
+    console.log(JSON.stringify({
+      event: "official_market_sync",
+      tasks: requestedTasks,
+      ...totalMetrics,
+      score_recomputed: scoringRequested && scoringInputChanged,
+      status: overallStatus,
+    }));
     await writeCrawlerLog(
       db,
       payload.crawler_name || "official-market-sync",
@@ -7498,11 +7985,11 @@ async function syncOfficialMarketData(db, payload = {}) {
       requestedTasks.join(","),
       startedAt,
       overallStatus,
-      Object.values(summary).reduce((total, group) => total + Object.values(group).reduce((sum, item) => sum + Number(item.inserted || 0), 0), 0),
-      Object.values(summary).reduce((total, group) => total + Object.values(group).reduce((sum, item) => sum + Number(item.updated || 0), 0), 0),
+      totalMetrics.inserted,
+      totalMetrics.changed,
       sourceErrors.length ? JSON.stringify(sourceErrors).slice(0, 1800) : null,
     );
-    return { status: overallStatus, tasks: requestedTasks, summary, source_errors: sourceErrors };
+    return { status: overallStatus, tasks: requestedTasks, summary, metrics: totalMetrics, source_errors: sourceErrors };
   } catch (error) {
     await writeCrawlerLog(
       db,
@@ -7551,11 +8038,15 @@ async function runScheduledUpdate(env, event, job) {
     report = await syncOfficialMarketData(env.DB, {
       crawler_name: job.name,
       tasks: job.tasks,
+      // TPEx blocks Cloudflare egress and Browser Run. It is imported by the
+      // external GitHub Actions sync, which sends normalized official rows to
+      // the protected import endpoints only when the source is reachable.
+      skip_tpex: job.skipTpex === true,
       recompute_scores: job.recompute_scores === true,
-      skip_tpex: true,
+      index_months: job.indexMonths,
       trigger: "cloudflare-cron",
       cron: event.cron,
-    });
+    }, env);
   }
   const notifications = await sendScheduledUpdateNotifications(env.DB, env, job.slot, report, scheduledAt);
   return { job: job.name, slot: job.slot, report, notifications };
@@ -8641,6 +9132,7 @@ function html(stocksData, themesData, statusData, stockTree, themeTree, institut
   ${show("data") ? `<section class="panel" id="sources" style="margin-top:16px"><p class="eyebrow">Reference Sources</p><div class="panel-head"><h2>資料來源與參考連結</h2><span class="info-dot" tabindex="0" data-tip="快訊、注意股、處置股與重大訊息優先採交易所或公開資訊觀測站。">!</span></div><p class="muted">快訊、注意股、處置股、重大訊息與基本行情會優先採官方來源；新聞只作輔助解讀，不能取代官方公告。</p><div class="source-list">${sourceRows}</div></section>` : ""}
   ${show("taxonomy") ? `<section class="panel" id="leader-roster" style="margin-top:16px"><p class="eyebrow">Leader Supply Chain</p><div class="panel-head"><h2>龍頭應用商供應鏈名冊</h2><span class="info-dot" tabindex="0" data-tip="供應商若有 4 碼股票代號，可點開右側個股抽屜。">!</span></div><div data-roster-root></div></section>` : ""}
 </main>
+${releaseNoticeHtml()}
 <div class="stock-backdrop" data-stock-backdrop></div>
 <aside class="stock-drawer" data-stock-drawer aria-hidden="true">
   <header class="drawer-head"><div><p class="eyebrow">Stock Detail</p><h2 data-stock-drawer-title>個股資訊</h2><small class="muted" data-stock-drawer-subtitle>點選股票查看日線、月線與法人指標</small></div><button type="button" data-stock-close aria-label="關閉">×</button></header>
@@ -9424,6 +9916,16 @@ function classificationAdminHtml() {
 </script></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } });
 }
 
+function themeCandidatesAdminHtml() {
+  return new Response(`<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>題材候選審核 | 台股研究平台</title><style>
+:root{--bg:#f6f7f2;--ink:#1d252b;--muted:#64727a;--line:#dce2dc;--green:#1f7a5a;--red:#d94a3a}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}main{width:min(1100px,calc(100% - 32px));margin:auto;padding:24px 0 48px}a{color:var(--green)}.panel,.item{border:1px solid var(--line);border-radius:9px;background:#fff;padding:14px}.panel{margin-bottom:14px}.login{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}input,button{border:1px solid var(--line);border-radius:6px;padding:10px;font:inherit}button{cursor:pointer;font-weight:900}.load,.approve{background:var(--green);color:#fff}.reject{background:var(--red);color:#fff}.list{display:grid;gap:10px}.item h2{margin:0 0 6px;font-size:1.12rem}.item p,.evidence{margin:6px 0;color:var(--muted);line-height:1.55}.evidence{border-left:3px solid var(--line);padding-left:9px}.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.actions input{flex:1 1 240px}.status{color:var(--muted)}small{color:var(--muted)}@media(max-width:650px){.login{grid-template-columns:1fr}}
+</style></head><body><main><p><a href="/">← 回首頁</a></p>
+<section class="panel"><h1>新題材候選審核</h1><p class="status">來源是上市公司官方重大訊息。系統只建立待審候選與證據；按「核准」後才會新增公開題材及股票關聯。</p><form class="login" data-login><input data-token type="password" autocomplete="off" placeholder="ADMIN_SYNC_TOKEN"><button class="load">載入候選</button></form><p class="status" data-status>尚未載入。</p></section><section class="list" data-list></section>
+</main><script>(()=>{const form=document.querySelector("[data-login]"),token=document.querySelector("[data-token]"),root=document.querySelector("[data-list]"),status=document.querySelector("[data-status]");let rows=[];const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));const headers=()=>({authorization:"Bearer "+token.value,"content-type":"application/json"});const render=()=>{root.innerHTML=rows.map(row=>'<article class="item" data-id="'+row.id+'"><h2>'+esc(row.theme_name)+'</h2><small>信心 '+esc(row.confidence_score)+' · '+esc(row.stock_count)+' 家公司 · '+esc(row.source_count)+' 則公告 · 最近：'+esc(row.last_seen_at)+'</small><p>'+esc(row.rationale||"")+'</p>'+(row.evidence||[]).map(e=>'<div class="evidence"><b>'+esc(e.stock_code+' '+(e.stock_name||""))+'</b> · '+esc(e.announcement_date)+'<br>'+esc(e.headline)+'<br><small>命中：'+esc(e.matched_keywords||"-")+'</small></div>').join("")+'<div class="actions"><input data-name value="'+esc(row.theme_name)+'" aria-label="公開題材名稱"><button class="approve" data-decision="approved">核准並發布</button><button class="reject" data-decision="rejected">駁回</button></div></article>').join("")||'<article class="panel">目前沒有待審的新題材候選。</article>';};async function load(){status.textContent="載入中...";const response=await fetch("/api/admin/theme-candidates?status=pending",{headers:headers()});const parsed=await response.json();if(!response.ok)throw new Error(parsed.error||"載入失敗");rows=parsed.data||[];render();status.textContent="待審 "+rows.length+" 個候選。";}form.addEventListener("submit",async event=>{event.preventDefault();try{await load();}catch(error){status.textContent=error.message;}});root.addEventListener("click",async event=>{const button=event.target.closest("[data-decision]");if(!button)return;const item=button.closest("[data-id]");button.disabled=true;try{const response=await fetch("/api/admin/theme-candidates/"+item.dataset.id+"/review",{method:"POST",headers:headers(),body:JSON.stringify({decision:button.dataset.decision,theme_name:item.querySelector("[data-name]").value,reviewed_by:"theme-candidate-admin"})});const parsed=await response.json();if(!response.ok)throw new Error(parsed.error||"更新失敗");rows=rows.filter(row=>String(row.id)!==item.dataset.id);render();status.textContent="已"+(button.dataset.decision==="approved"?"核准發布":"駁回")+"題材。";}catch(error){status.textContent=error.message;button.disabled=false;}});})();</script></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" } });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -9481,7 +9983,7 @@ export default {
       });
     }
     if (
-      (url.pathname.startsWith("/api/admin/") || url.pathname === "/admin/classifications")
+      (url.pathname.startsWith("/api/admin/") || url.pathname === "/admin/classifications" || url.pathname === "/admin/theme-candidates")
       && url.hostname !== "claw.terry878.org"
       && url.hostname !== "localhost"
       && url.hostname !== "127.0.0.1"
@@ -9505,6 +10007,9 @@ export default {
       }
       return json({ error: "unauthorized" }, 401);
     }
+    if (url.pathname.startsWith("/api/tpex-sync/") && !isTpexSyncAuthorized(request, env, url)) {
+      return jsonWithHeaders({ error: "unauthorized" }, { "cache-control": "no-store" }, 401);
+    }
     const rateLimitedResponse = await enforceApiRateLimit(request, env, url);
     if (rateLimitedResponse) return rateLimitedResponse;
     const db = env.DB;
@@ -9516,6 +10021,9 @@ export default {
       }
       if (url.pathname === "/admin/classifications" && request.method === "GET") {
         return classificationAdminHtml();
+      }
+      if (url.pathname === "/admin/theme-candidates" && request.method === "GET") {
+        return themeCandidatesAdminHtml();
       }
 
       if (url.pathname === "/api/auth/google" && request.method === "POST") {
@@ -9814,6 +10322,107 @@ export default {
         return json({ data: results || [], meta: { taxonomy_version: TAXONOMY_VERSION } });
       }
 
+      if (url.pathname === "/api/admin/theme-candidates" && request.method === "GET") {
+        const status = ["pending", "approved", "rejected"].includes(url.searchParams.get("status"))
+          ? url.searchParams.get("status")
+          : "pending";
+        const { results: candidates = [] } = await db.prepare(`
+          select id, candidate_key, theme_name, status, confidence_score, first_seen_at, last_seen_at,
+            source_count, stock_count, source, evidence_url, rationale, approved_theme_id,
+            reviewed_by, reviewed_at, review_note, created_at, updated_at
+          from theme_candidates
+          where status = ?
+          order by confidence_score desc, updated_at desc, id desc
+          limit 100
+        `).bind(status).all();
+        const data = [];
+        for (const candidate of candidates) {
+          const { results: evidence = [] } = await db.prepare(`
+            select stock_code, stock_name, announcement_date, headline, body_excerpt,
+              matched_keywords, source_url, created_at
+            from theme_candidate_evidence
+            where candidate_id = ?
+            order by announcement_date desc, id desc
+            limit 20
+          `).bind(candidate.id).all();
+          data.push({ ...candidate, evidence });
+        }
+        return json({ data, meta: { source: "twse-official-major-announcements", review_required: true } });
+      }
+
+      const themeCandidateReviewMatch = url.pathname.match(/^\/api\/admin\/theme-candidates\/(\d+)\/review$/);
+      if (themeCandidateReviewMatch && ["POST", "PATCH"].includes(request.method)) {
+        const candidateId = Number(themeCandidateReviewMatch[1]);
+        const body = await request.json().catch(() => ({}));
+        const decision = ["approved", "rejected"].includes(String(body.decision)) ? String(body.decision) : null;
+        if (!decision) return json({ error: "decision must be approved or rejected" }, 400);
+        const candidate = await db.prepare("select * from theme_candidates where id = ?").bind(candidateId).first();
+        if (!candidate) return json({ error: "theme candidate not found" }, 404);
+        if (candidate.status !== "pending") return json({ error: "theme candidate has already been reviewed" }, 409);
+        const now = new Date().toISOString();
+        const reviewedBy = String(body.reviewed_by || "admin").slice(0, 120);
+        const reviewNote = String(body.note || "").slice(0, 500) || null;
+        if (decision === "rejected") {
+          await db.prepare(`
+            update theme_candidates
+            set status = 'rejected', reviewed_by = ?, reviewed_at = ?, review_note = ?, updated_at = ?
+            where id = ? and status = 'pending'
+          `).bind(reviewedBy, now, reviewNote, now, candidateId).run();
+          return json({ data: { id: candidateId, decision: "rejected" } });
+        }
+        const themeName = String(body.theme_name || candidate.theme_name).trim().slice(0, 80);
+        if (themeName.length < 2) return json({ error: "theme_name must contain at least 2 characters" }, 400);
+        const { results: evidence = [] } = await db.prepare(`
+          select stock_code, stock_name, announcement_date, headline, source_url
+          from theme_candidate_evidence
+          where candidate_id = ?
+          order by announcement_date desc, id desc
+        `).bind(candidateId).all();
+        if (!evidence.length) return json({ error: "theme candidate has no official evidence" }, 409);
+        const theme = await ensureTheme(db, {
+          theme_name: themeName,
+          theme_category: "official-disclosure-candidate",
+          description: `由上市公司官方重大訊息候選審核建立；已保留 ${evidence.length} 則公告證據。`,
+          keywords: candidate.candidate_key,
+          source: "manual-review",
+          source_url: candidate.evidence_url || SOURCE_TWSE_MAJOR_ANNOUNCEMENTS,
+        }, now);
+        let linksCreated = 0;
+        for (const item of evidence) {
+          const stock = await db.prepare("select id from stocks where stock_code = ? order by case market_type when '上市' then 0 else 1 end limit 1").bind(item.stock_code).first();
+          if (!stock) continue;
+          const result = await db.prepare(`
+            insert into stock_themes (
+              stock_id, theme_id, relation_strength, reason, source, source_url, updated_at,
+              confidence_score, evidence_type, evidence_url, rule_version, review_status
+            ) values (?, ?, '中', ?, 'manual-review', ?, ?, ?, 'official-major-announcement', ?, 'theme-candidate-v1', 'approved')
+            on conflict(stock_id, theme_id) do update set
+              relation_strength = excluded.relation_strength, reason = excluded.reason,
+              source = excluded.source, source_url = excluded.source_url, updated_at = excluded.updated_at,
+              confidence_score = excluded.confidence_score, evidence_type = excluded.evidence_type,
+              evidence_url = excluded.evidence_url, rule_version = excluded.rule_version, review_status = excluded.review_status
+            where stock_themes.source not in ('manual', 'manual-review')
+          `).bind(
+            stock.id,
+            theme.id,
+            `經人工審核：上市公司重大訊息「${String(item.headline || "").slice(0, 220)}」`,
+            item.source_url,
+            now,
+            Math.max(80, Math.min(100, Number(candidate.confidence_score || 80))),
+            item.source_url,
+          ).run();
+          linksCreated += Number(result.meta?.changes || 0);
+        }
+        await db.prepare(`
+          update theme_candidates
+          set status = 'approved', theme_name = ?, approved_theme_id = ?, reviewed_by = ?,
+            reviewed_at = ?, review_note = ?, updated_at = ?
+          where id = ? and status = 'pending'
+        `).bind(themeName, theme.id, reviewedBy, now, reviewNote, now, candidateId).run();
+        const themeScore = await recomputeVerifiedThemeScores(db);
+        return json({ data: { id: candidateId, decision: "approved", theme_id: theme.id, theme_name: themeName, stock_links_created: linksCreated, theme_score: themeScore } });
+      }
+
       const classificationReviewMatch = url.pathname.match(/^\/api\/admin\/classifications\/(\d{4})\/themes\/(\d+)$/);
       if (classificationReviewMatch && ["POST", "PATCH"].includes(request.method)) {
         const [, stockCode, themeId] = classificationReviewMatch;
@@ -9874,46 +10483,52 @@ export default {
       const stockMatch = url.pathname.match(/^\/api\/stocks\/([^/]+)(?:\/([^/]+))?$/);
 
       if (url.pathname === "/api/stocks") {
-        const data = await listStocks(db, url);
-        return json({
-          data,
-          meta: {
-            updated_at: new Date().toISOString(),
-            source: "cloudflare-d1",
-            is_realtime: false,
-            taxonomy_version: TAXONOMY_VERSION,
-            public_confidence_threshold: PUBLIC_CLASSIFICATION_CONFIDENCE,
-            institutional_window: [1, 5, 10, 20].includes(Number(url.searchParams.get("institutional_window")))
-              ? Number(url.searchParams.get("institutional_window"))
-              : 1,
-          },
-        });
+        return await cachedPublicApiResponse(request, ctx, url, async () => {
+          const data = await listStocks(db, url);
+          return json({
+            data,
+            meta: {
+              updated_at: new Date().toISOString(),
+              source: "cloudflare-d1",
+              is_realtime: false,
+              taxonomy_version: TAXONOMY_VERSION,
+              public_confidence_threshold: PUBLIC_CLASSIFICATION_CONFIDENCE,
+              institutional_window: [1, 5, 10, 20].includes(Number(url.searchParams.get("institutional_window")))
+                ? Number(url.searchParams.get("institutional_window"))
+                : 1,
+            },
+          });
+        }, PUBLIC_API_CACHE_PARAMS["/api/stocks"]);
       }
 
       if (url.pathname === "/api/stocks/suggest") {
-        const data = await listStockSuggestions(db, url);
-        return json({
-          data,
-          meta: {
-            updated_at: new Date().toISOString(),
-            source: "cloudflare-d1-stock-master",
-            is_realtime: false,
-            includes_instrument_types: ["stock", "emerging", "etf", "tdr"],
-          },
-        });
+        return await cachedPublicApiResponse(request, ctx, url, async () => {
+          const data = await listStockSuggestions(db, url);
+          return json({
+            data,
+            meta: {
+              updated_at: new Date().toISOString(),
+              source: "cloudflare-d1-stock-master",
+              is_realtime: false,
+              includes_instrument_types: ["stock", "emerging", "etf", "tdr"],
+            },
+          });
+        }, PUBLIC_API_CACHE_PARAMS["/api/stocks/suggest"]);
       }
 
       if (url.pathname === "/api/themes/suggest") {
-        const data = await listThemeSuggestions(db, url);
-        return json({
-          data,
-          meta: {
-            updated_at: new Date().toISOString(),
-            source: "cloudflare-d1",
-            is_realtime: false,
-            public_confidence_threshold: PUBLIC_CLASSIFICATION_CONFIDENCE,
-          },
-        });
+        return await cachedPublicApiResponse(request, ctx, url, async () => {
+          const data = await listThemeSuggestions(db, url);
+          return json({
+            data,
+            meta: {
+              updated_at: new Date().toISOString(),
+              source: "cloudflare-d1",
+              is_realtime: false,
+              public_confidence_threshold: PUBLIC_CLASSIFICATION_CONFIDENCE,
+            },
+          });
+        }, PUBLIC_API_CACHE_PARAMS["/api/themes/suggest"]);
       }
 
       if (url.pathname === "/api/stocks/tree") {
@@ -9943,22 +10558,24 @@ export default {
       if (stockMatch) {
         const [, stockCode, series] = stockMatch;
         if (!series) {
-          const data = await getStock(db, stockCode);
-          return data ? json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } }) : json({ error: "not found" }, 404);
+          return await cachedPublicApiResponse(request, ctx, url, async () => {
+            const data = await getStock(db, stockCode);
+            return data ? json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } }) : json({ error: "not found" }, 404);
+          });
         }
         if (series === "news") {
-          return await cachedResponse(request, ctx, async () => {
+          return await cachedPublicApiResponse(request, ctx, url, async () => {
             const data = await listStockNews(db, stockCode);
             return data
               ? jsonWithHeaders(
                   { data, meta: { updated_at: new Date().toISOString(), source: "official-announcements-and-trusted-media", is_realtime: false } },
-                  { "cache-control": "public, max-age=300, s-maxage=900" },
-                )
+                  { "cache-control": "public, max-age=300, s-maxage=300" },
+              )
               : json({ error: "not found" }, 404);
-          }, 900);
+          });
         }
         if (series === "history") {
-          return await cachedResponse(request, ctx, async () => {
+          return await cachedPublicApiResponse(request, ctx, url, async () => {
             const result = await listOfficialStockHistory(db, stockCode, url);
             if (!result) return json({ error: "not found" }, 404);
             return jsonWithHeaders({
@@ -9969,8 +10586,8 @@ export default {
                 is_realtime: false,
                 history: result.history,
               },
-            }, { "cache-control": "public, max-age=300, s-maxage=3600" });
-          }, 3600);
+            }, { "cache-control": "public, max-age=300, s-maxage=300" });
+          }, ["months"]);
         }
         const tableMap = {
           price: ["daily_prices", "trade_date asc"],
@@ -9979,18 +10596,27 @@ export default {
           institutional: ["institutional_flows", "trade_date desc"],
         };
         if (!tableMap[series]) return json({ error: "not found" }, 404);
-        let history = null;
-        if (series === "price" && ["all", "1", "true"].includes(String(url.searchParams.get("history") || "").toLowerCase())) {
-          history = await ensureStockPriceHistory(db, stockCode, url);
-        }
-        if (String(url.searchParams.get("return") || "").toLowerCase() === "meta") {
-          return json({ data: [], meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false, history } });
-        }
-        const seriesOptions = {};
-        if (series === "revenue") seriesOptions.limit = clampInt(url.searchParams.get("months"), 24, 1, 120);
-        if (series === "institutional") seriesOptions.limit = clampInt(url.searchParams.get("days"), 60, 1, 240);
-        const data = await stockSeries(db, stockCode, tableMap[series][0], tableMap[series][1], seriesOptions);
-        return data ? json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false, history } }) : json({ error: "not found" }, 404);
+        const cacheParams = series === "price"
+          ? ["history", "return", "months", "from"]
+          : series === "revenue"
+            ? ["months"]
+            : series === "institutional"
+              ? ["days"]
+              : [];
+        return await cachedPublicApiResponse(request, ctx, url, async () => {
+          let history = null;
+          if (series === "price" && ["all", "1", "true"].includes(String(url.searchParams.get("history") || "").toLowerCase())) {
+            history = await ensureStockPriceHistory(db, stockCode, url);
+          }
+          if (String(url.searchParams.get("return") || "").toLowerCase() === "meta") {
+            return json({ data: [], meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false, history } });
+          }
+          const seriesOptions = {};
+          if (series === "revenue") seriesOptions.limit = clampInt(url.searchParams.get("months"), 24, 1, 120);
+          if (series === "institutional") seriesOptions.limit = clampInt(url.searchParams.get("days"), 60, 1, 240);
+          const data = await stockSeries(db, stockCode, tableMap[series][0], tableMap[series][1], seriesOptions);
+          return data ? json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false, history } }) : json({ error: "not found" }, 404);
+        }, cacheParams);
       }
 
       if (url.pathname === "/api/market/main-flow" || url.pathname === "/api/themes/ranking") {
@@ -10076,9 +10702,11 @@ export default {
       }
 
       if (url.pathname === "/api/market/index") {
-        const limit = clampInt(url.searchParams.get("limit"), 260, 1, 1000);
-        const data = await listMarketIndex(db, limit);
-        return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
+        return await cachedPublicApiResponse(request, ctx, url, async () => {
+          const limit = clampInt(url.searchParams.get("limit"), 260, 1, 1000);
+          const data = await listMarketIndex(db, limit);
+          return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
+        }, PUBLIC_API_CACHE_PARAMS["/api/market/index"]);
       }
 
       if (url.pathname === "/api/market/surveillance") {
@@ -10110,11 +10738,11 @@ export default {
       if (url.pathname === "/api/admin/crawler/run" && request.method === "POST") {
         const payload = await request.json().catch(() => ({}));
         if (payload.wait === true) {
-          const data = await syncOfficialMarketData(db, payload);
+          const data = await syncOfficialMarketData(db, payload, env);
           return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
         }
-        ctx.waitUntil(syncOfficialMarketData(db, payload));
-        const data = { status: "accepted", tasks: payload.tasks || ["daily-price", "stock-valuation", "monthly-revenue", "institutional-flow", "market-index", "dividend"], message: "Official market sync started in background." };
+        ctx.waitUntil(syncOfficialMarketData(db, payload, env));
+        const data = { status: "accepted", tasks: payload.tasks || ["daily-price", "stock-valuation", "monthly-revenue", "institutional-flow", "market-index", "dividend", "theme-candidates"], message: "Official market sync started in background." };
         return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
       }
 
@@ -10182,6 +10810,51 @@ export default {
         const payload = await request.json();
         const data = await importInstitutionalFlowRows(db, payload);
         return json({ data, meta: { updated_at: new Date().toISOString(), source: "cloudflare-d1", is_realtime: false } });
+      }
+
+      if (url.pathname === "/api/tpex-sync/daily-price" && request.method === "POST") {
+        const payload = await request.json().catch(() => ({}));
+        const received = Array.isArray(payload.rows) ? payload.rows.slice(0, 2500) : [];
+        const rows = received.filter((row) => ["上櫃", "興櫃"].includes(row?.market_type));
+        if (!rows.length || rows.length !== received.length) return json({ error: "TPEx daily-price rows must be 上櫃 or 興櫃 only" }, 400);
+        const data = await importDailyPriceRows(db, {
+          rows,
+          source: "TPEx OpenAPI external sync",
+          source_url: "TPEx official OpenAPI",
+          latest_data_date: payload.latest_data_date,
+          batch: "restricted-tpex-sync",
+        });
+        return json({ data, meta: { updated_at: new Date().toISOString(), source: "restricted-tpex-sync", is_realtime: false } });
+      }
+
+      if (url.pathname === "/api/tpex-sync/stock-valuation" && request.method === "POST") {
+        const payload = await request.json().catch(() => ({}));
+        const received = Array.isArray(payload.rows) ? payload.rows.slice(0, 2500) : [];
+        if (!received.length) return json({ error: "TPEx valuation rows are required" }, 400);
+        const rows = received.map((row) => ({ ...row, market_type: "上櫃", source: "TPEx OpenAPI external sync" }));
+        const data = await importStockValuationRows(db, rows, []);
+        return json({ data, meta: { updated_at: new Date().toISOString(), source: "restricted-tpex-sync", is_realtime: false } });
+      }
+
+      if (url.pathname === "/api/tpex-sync/institutional-flow" && request.method === "POST") {
+        const payload = await request.json().catch(() => ({}));
+        const received = Array.isArray(payload.rows) ? payload.rows.slice(0, 2500) : [];
+        if (!received.length) return json({ error: "TPEx institutional-flow rows are required" }, 400);
+        const rows = received.map((row) => ({ ...row, market_type: "上櫃", source: "TPEx OpenAPI external sync" }));
+        const data = await importInstitutionalFlowRows(db, {
+          rows,
+          source: "TPEx OpenAPI external sync",
+          source_url: "TPEx official OpenAPI",
+          latest_data_date: payload.latest_data_date,
+          batch: "restricted-tpex-sync",
+        });
+        return json({ data, meta: { updated_at: new Date().toISOString(), source: "restricted-tpex-sync", is_realtime: false } });
+      }
+
+      if (url.pathname === "/api/tpex-sync/complete" && request.method === "POST") {
+        const themeScore = await recomputeVerifiedThemeScores(db);
+        const stockScore = await recomputeAvailableStockScores(db);
+        return json({ data: { theme_score: themeScore, stock_score: stockScore }, meta: { updated_at: new Date().toISOString(), source: "restricted-tpex-sync", is_realtime: false } });
       }
 
       if (url.pathname === "/api/admin/import/theme-tags" && request.method === "POST") {
@@ -10258,6 +10931,12 @@ export default {
       return await cachedResponse(request, ctx, renderPage);
     } catch (error) {
       const message = error && error.stack ? error.stack : String(error);
+      if (request.method === "GET" && PUBLIC_PAGE_PATHS.has(url.pathname) && isD1DailyReadLimitError(error)) {
+        return d1DailyReadLimitHtml();
+      }
+      if (request.method === "GET" && url.pathname.startsWith("/api/") && isD1DailyReadLimitError(error)) {
+        return d1DailyReadLimitApiResponse();
+      }
       try {
         await writeCrawlerLog(db, "worker-error", "cloudflare-worker", url.href, new Date().toISOString(), "failed", 0, 0, message);
       } catch (_) {
@@ -10273,17 +10952,20 @@ export default {
     const job = utcHour === 0
       ? { slot: "08:00", name: "daily-global-market-sync", tasks: [] }
       : utcHour === 10
-        ? { slot: "18:00", name: "daily-price-valuation-institutional-sync", tasks: ["daily-price", "stock-valuation", "institutional-flow"], recompute_scores: true }
+        ? { slot: "18:00", name: "daily-price-valuation-institutional-sync", tasks: ["daily-price", "stock-valuation", "institutional-flow"], skipTpex: true, recompute_scores: true }
         : utcDay === 0
-          ? { slot: "10:00", name: "weekly-official-stock-basic-sync", tasks: ["stock-basic"] }
-          : { slot: "10:00", name: "daily-fundamental-calendar-sync", tasks: ["monthly-revenue", "market-index", "dividend"], recompute_scores: true };
+          ? { slot: "10:00", name: "weekly-official-stock-basic-sync", tasks: ["stock-basic", "market-index", "theme-candidates"], skipTpex: true, indexMonths: 12 }
+          : { slot: "10:00", name: "daily-fundamental-calendar-sync", tasks: ["monthly-revenue", "market-index", "dividend", "theme-candidates"], skipTpex: true, indexMonths: 2, recompute_scores: true };
     ctx.waitUntil(runScheduledUpdate(env, event, job));
   },
 };
 
 export {
   isAdminAuthorized,
+  isTpexSyncAuthorized,
   normalizeTwseMiIndexDailyRow,
+  normalizeTpexInstitutionalRow,
+  normalizeTpexOtcDailyPrice,
   normalizeTpexStockBasic,
   normalizeTwseStockBasic,
   normalizeYahooIndexResult,

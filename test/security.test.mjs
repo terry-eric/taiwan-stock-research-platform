@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import worker, { isAdminAuthorized } from "../src/index.js";
+import worker, { isAdminAuthorized, isTpexSyncAuthorized } from "../src/index.js";
 
 test("admin endpoints require the configured bearer token", async () => {
   assert.equal(
@@ -21,6 +21,24 @@ test("admin endpoints require the configured bearer token", async () => {
   assert.equal(response.status, 401);
 });
 
+test("TPEx sync token is restricted to its four POST-only endpoints", async () => {
+  const env = { TPEX_SYNC_TOKEN: "tpex-secret" };
+  const authorized = new Request("https://example.test/api/tpex-sync/daily-price", {
+    method: "POST", headers: { authorization: "Bearer tpex-secret" },
+  });
+  assert.equal(isTpexSyncAuthorized(authorized, env, new URL(authorized.url)), true);
+  const forbidden = new Request("https://example.test/api/admin/crawler/run", {
+    method: "POST", headers: { authorization: "Bearer tpex-secret" },
+  });
+  assert.equal(isTpexSyncAuthorized(forbidden, env, new URL(forbidden.url)), false);
+  const denied = await worker.fetch(
+    new Request("https://example.test/api/tpex-sync/daily-price", { method: "POST" }),
+    { DB: {}, TPEX_SYNC_TOKEN: "tpex-secret" },
+    { waitUntil() {} },
+  );
+  assert.equal(denied.status, 401);
+});
+
 test("public 500 responses do not expose stack traces", async () => {
   const response = await worker.fetch(
     new Request("https://example.test/"),
@@ -29,6 +47,41 @@ test("public 500 responses do not expose stack traces", async () => {
   );
   assert.equal(response.status, 500);
   assert.deepEqual(await response.json(), { error: "internal server error" });
+});
+
+test("public pages keep the release notice visible when D1 daily reads are exhausted", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/"),
+    {
+      DB: {
+        prepare() {
+          throw new Error("D1_ERROR: exceeded D1's free tier daily row read limit [code: 7500]");
+        },
+      },
+    },
+    { waitUntil() {} },
+  );
+  assert.equal(response.status, 503);
+  const page = await response.text();
+  assert.match(page, /資料庫讀取額度暫時到達上限/);
+  assert.match(page, /data-release-notice-version="2026-09-03-d1-read-optimization"/);
+});
+
+test("public APIs report a D1 daily read limit without exposing an internal error", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/stocks"),
+    {
+      DB: {
+        prepare() {
+          throw new Error("D1_ERROR: exceeded D1's free tier daily row read limit [code: 7500]");
+        },
+      },
+    },
+    { waitUntil() {} },
+  );
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("retry-after"), "3600");
+  assert.equal((await response.json()).error, "d1_daily_read_limit");
 });
 
 test("public API rate limiting returns 429 before touching D1", async () => {

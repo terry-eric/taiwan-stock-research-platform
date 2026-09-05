@@ -1,5 +1,5 @@
 const WORKER_BASE_URL = String(process.env.WORKER_BASE_URL || "https://claw.terry878.org").replace(/\/$/, "");
-const ADMIN_SYNC_TOKEN = String(process.env.ADMIN_SYNC_TOKEN || "");
+const TPEX_SYNC_TOKEN = String(process.env.TPEX_SYNC_TOKEN || "");
 
 const SOURCES = {
   dailyPrice: "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
@@ -8,7 +8,7 @@ const SOURCES = {
   institutional: "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading",
 };
 
-if (!ADMIN_SYNC_TOKEN) throw new Error("ADMIN_SYNC_TOKEN is required");
+if (!TPEX_SYNC_TOKEN) throw new Error("TPEX_SYNC_TOKEN is required");
 
 function value(row, keys, fallback = null) {
   for (const key of keys) {
@@ -52,7 +52,7 @@ async function officialJson(url) {
 async function post(path, payload) {
   const response = await fetch(`${WORKER_BASE_URL}${path}`, {
     method: "POST",
-    headers: { authorization: `Bearer ${ADMIN_SYNC_TOKEN}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${TPEX_SYNC_TOKEN}`, "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => ({}));
@@ -128,10 +128,10 @@ const valuationRows = valuation.map(normalizeValuation).filter(Boolean);
 const institutionalRows = institutional.map(normalizeInstitutional).filter(Boolean);
 
 const results = {};
-results.daily_price = await post("/api/admin/import/twse-daily-price", { rows: priceRows, source: "TPEx OpenAPI external sync", source_url: `${SOURCES.dailyPrice} + ${SOURCES.emergingPrice}`, latest_data_date: latestDate(priceRows), batch: "github-actions-tpex" });
-results.stock_valuation = await post("/api/admin/import/stock-valuation", { rows: valuationRows, market_scope: "tpex" });
-results.institutional_flow = await post("/api/admin/import/institutional-flow", { rows: institutionalRows, source: "TPEx OpenAPI external sync", source_url: SOURCES.institutional, latest_data_date: latestDate(institutionalRows), batch: "github-actions-tpex" });
+results.daily_price = await post("/api/tpex-sync/daily-price", { rows: priceRows, latest_data_date: latestDate(priceRows) });
+results.stock_valuation = await post("/api/tpex-sync/stock-valuation", { rows: valuationRows });
+results.institutional_flow = await post("/api/tpex-sync/institutional-flow", { rows: institutionalRows, latest_data_date: latestDate(institutionalRows) });
 
 const changed = Object.values(results).some((result) => Number(result.changed || 0) > 0);
-if (changed) results.scores = await post("/api/admin/scores/recompute", {});
+if (changed) results.scores = await post("/api/tpex-sync/complete", {});
 console.log(JSON.stringify({ event: "tpex_external_sync", rows: { daily_price: priceRows.length, stock_valuation: valuationRows.length, institutional_flow: institutionalRows.length }, changed, results }));

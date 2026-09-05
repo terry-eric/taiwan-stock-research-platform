@@ -12,6 +12,10 @@ directory = "./public"
 [triggers]
 crons = ["0 0,2,10 * * *"]
 
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [vars]
 NOTIFICATION_FROM_EMAIL = "updates@terry878.org"
 CLOUDFLARE_ACCOUNT_ID = "da2fb9d659c49b5073d1aa900e84f9ab"

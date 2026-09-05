@@ -23,11 +23,11 @@ jobs:
         with:
           node-version: "24"
       - name: Await one-time secret setup
-        if: ${{ secrets.ADMIN_SYNC_TOKEN == '' }}
-        run: echo "TPEx sync is safely skipped until repository secret ADMIN_SYNC_TOKEN is configured."
+        if: ${{ secrets.TPEX_SYNC_TOKEN == '' }}
+        run: echo "TPEx sync is safely skipped until repository secret TPEX_SYNC_TOKEN is configured."
       - name: Fetch TPEx official data and import changed rows
-        if: ${{ secrets.ADMIN_SYNC_TOKEN != '' }}
+        if: ${{ secrets.TPEX_SYNC_TOKEN != '' }}
         env:
           WORKER_BASE_URL: https://claw.terry878.org
-          ADMIN_SYNC_TOKEN: ${{ secrets.ADMIN_SYNC_TOKEN }}
+          TPEX_SYNC_TOKEN: ${{ secrets.TPEX_SYNC_TOKEN }}
         run: node scripts/sync-tpex-to-cloudflare.mjs
