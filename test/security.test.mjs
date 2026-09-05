@@ -168,6 +168,23 @@ test("oversized non-admin writes are rejected before JSON parsing", async () => 
   assert.deepEqual(await response.json(), { error: "payload_too_large" });
 });
 
+test("restricted TPEx sync allows a bounded official trading-day payload", async () => {
+  const response = await worker.fetch(
+    new Request("https://example.test/api/tpex-sync/daily-price", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer tpex-secret",
+        "content-type": "application/json",
+        "content-length": "70000",
+      },
+      body: "{}",
+    }),
+    { DB: {}, TPEX_SYNC_TOKEN: "tpex-secret" },
+    { waitUntil() {} },
+  );
+  assert.equal(response.status, 400, "request reaches the restricted handler instead of the generic 64 KiB limiter");
+});
+
 test("cross-origin API preflights are rejected while same-origin preflights are allowed", async () => {
   const blocked = await worker.fetch(
     new Request("https://example.test/api/stocks", {

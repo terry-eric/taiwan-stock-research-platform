@@ -1819,7 +1819,15 @@ async function enforceApiRateLimit(request, env, url) {
 function rejectOversizedRequest(request, url) {
   if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return null;
   const contentLength = Number(request.headers.get("content-length") || 0);
-  const maximumBytes = url.pathname.startsWith("/api/admin/") ? 6_000_000 : 65_536;
+  // Official TPEx sync rows contain many price fields, so a full trading-day
+  // payload is legitimately larger than normal public writes. The endpoint is
+  // still bearer-token-only and row-limited below, while all other public
+  // writes keep the small pre-parse limit.
+  const maximumBytes = url.pathname.startsWith("/api/admin/")
+    ? 6_000_000
+    : url.pathname.startsWith("/api/tpex-sync/")
+      ? 1_000_000
+      : 65_536;
   if (Number.isFinite(contentLength) && contentLength > maximumBytes) {
     return jsonWithHeaders(
       { error: "payload_too_large" },
