@@ -1,0 +1,33 @@
+name: TPEx official sync
+
+on:
+  schedule:
+    # 18:20 Asia/Taipei, after the Worker’s TWSE-only 18:00 update.
+    - cron: "20 10 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tpex-official-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Await one-time secret setup
+        if: ${{ secrets.ADMIN_SYNC_TOKEN == '' }}
+        run: echo "TPEx sync is safely skipped until repository secret ADMIN_SYNC_TOKEN is configured."
+      - name: Fetch TPEx official data and import changed rows
+        if: ${{ secrets.ADMIN_SYNC_TOKEN != '' }}
+        env:
+          WORKER_BASE_URL: https://claw.terry878.org
+          ADMIN_SYNC_TOKEN: ${{ secrets.ADMIN_SYNC_TOKEN }}
+        run: node scripts/sync-tpex-to-cloudflare.mjs
